@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nathaniel Greisen | Portfolio</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header>
+    <h1>Nathaniel Greisen</h1>
+    <nav>
+      <a href="#about">About</a>
+      <a href="#projects">Projects</a>
+      <a href="#contact">Contact</a>
+    </nav>
+  </header>
+  
+  <section id="about">
+    <h2>About Me</h2>
+    <p>Hello! I am a motivated Computer Science freshman at California Baptist University with experience in robotics,
+      software development, and team leadership.</p>
+    <p>I am passionate about creating effective code and developing innovative solutions through creativity and critical
+      thinking.</p>
+  </section>
+
+  <section id="projects">
+    <h2>Projects</h2>
+    <div class="project-grid">
+      <div class="project" data-title="Reggie" data-image="images/Reggie.jpeg" data-desc="A Java-based robot control system using the First Tech Challenge SDK with movement logic for omnidirectional wheels and advanced autonomous." data-link="https://github.com/nathanielgreisen/ftc24-25_DontKnow-Reggie">
+        <img src="images/Reggie.jpeg" alt="Reggie Project Screenshot">
+        <h3>Reggie</h3>
+        <p>A Java-based robot control system using the First Tech Challenge SDK with movement logic for omnidirectional
+          wheels and advanced autonomous.</p>
+        <a href="https://github.com/nathanielgreisen/ftc24-25_DontKnow-Reggie" target="_blank" class="project-link">View on GitHub</a>
+      </div>
+      <div class="project" data-title="Lancer's Stand" data-image="images/lancersStand.png" data-desc="A short, singleplayer platformer game created in Unity. Play as a Lancer to defeat other school mascots!" data-link="https://github.com/nathanielgreisen/Lancers-Stand">
+        <img src="images/lancersStand.png" alt="Lancer's Stand Screenshot">
+        <h3>Lancer's Stand</h3>
+        <p>A short, singleplayer platformer game created in Unity. Play as a Lancer to defeat other school mascots!</p>
+        <a href="https://github.com/nathanielgreisen/Lancers-Stand" target="_blank" class="project-link">View on GitHub</a>
+      </div>
+      <div class="project" data-title="Another Project" data-image="images/anotherThing.png" data-desc="Another project here">
+        <img src="images/anotherThing.png" alt="Another Project">
+        <h3>Another Project</h3>
+        <p>Another project here</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Modal for project details -->
+  <div id="project-modal" class="modal" aria-hidden="true">
+    <div class="modal-backdrop" data-close></div>
+    <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <button class="modal-close" aria-label="Close" data-close>&times;</button>
+      <div class="modal-body">
+        <img id="modal-image" src="" alt="" />
+        <h3 id="modal-title"></h3>
+        <p id="modal-desc"></p>
+        <a id="modal-link" class="project-link" target="_blank" href="">View on GitHub</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+
+  <section id="contact">
+    <h2>Contact</h2>
+    <p>Email: <a href="mailto:nlgreisen@gmail.com">nlgreisen@gmail.com</a></p>
+    <p>GitHub: <a href="https://github.com/nathanielgreisen" target="_blank">github.com/nathanielgreisen</a></p>
+    <p>LinkedIn: <a href="https://www.linkedin.com/in/nathanielgreisen/" target="_blank">linkedin.com/nathanielgreisen</a></p>
+  </section>
+
+  <footer>
+    <p>© 2025 Nathaniel Greisen</p>
+  </footer>
+</body>
+
+</html>
