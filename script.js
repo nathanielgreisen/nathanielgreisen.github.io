@@ -1,13 +1,19 @@
 // Array to store all circles
 let circles = [];
-const speed = 500; // how fast it moves per push
-const gravity = 1.5; // gravity strength
-const bounceForce = 500;
+const speed = 200; // how fast it moves per push
+const gravity = 2; // gravity strength
+const bounceForce = 30;
+const sizeMax = 175;
+const sizeMin = 30;
+const startingCircles = 15
 
 let mousePos = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 
 // Create initial circle
-createCircle();
+for (var i = 0; i<startingCircles; i++){
+  createCircle();
+}
+
 
 // Function to generate random color
 function getRandomColor() {
@@ -22,7 +28,7 @@ function getRandomColor() {
 // Function to create a new circle
 function createCircle() {
   const circle = document.createElement('div');
-  const size = Math.random() * (2 - 1) + 1; // Random size between 50px and 300px
+  const size = Math.random() * (sizeMax - sizeMin) + sizeMin; // Random size between 50px and 300px
   
   circle.style.width = size + 'px';
   circle.style.height = size + 'px';
@@ -71,12 +77,12 @@ document.addEventListener('mousemove', (e) => {
 // Keyboard controls
 document.addEventListener('keydown', (e) => {
   if (e.key === '=' || e.key === '+') {
-    for (var i = 0; i<100; i++){
+    for (var i = 0; i<1; i++){
       createCircle();
     }
     
   } else if (e.key === '-') {
-    for (var i = 0; i<100; i++){
+    for (var i = 0; i<1; i++){
       removeCircle();
     }
   }
