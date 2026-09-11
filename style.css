@@ -1,0 +1,101 @@
+/*header styles*/
+
+header {
+    text-align: center;
+    padding: 20px;
+}
+/*navigation menu styles*/
+nav {
+    text-align: center;
+    word-spacing: 20px;
+    padding: 10px;
+    background-color: #1E1E1E;
+}
+
+* {
+    box-sizing: border-box;
+    font-family: Helvetica;
+    color: #F5F5F5;
+    background-color: #121212;
+}
+.row {
+    display: flex;
+    flex-wrap: wrap;
+}
+.main-column {
+    flex: 1 1 68%;
+}
+
+.post-text-box {
+    padding:20px;
+    background-color: #1E1E1E;
+}
+
+.post-text-box h1 {
+    text-align: center;
+    background-color: #1E1E1E;
+}
+
+.post-text-box h2 {
+    text-align: center;
+    background-color: #1E1E1E;
+}
+
+.post-text-box p {
+    background-color: #1E1E1E;
+}
+
+.profile {
+    padding: 20px;
+    background-color: #232323;
+}
+
+.sidebar {
+    flex: 1 1 32%;
+}
+
+.main-column form {
+    padding: 20px;
+    background-color: #1E1E1E;
+}
+
+.profile h1 {
+    text-align: center;
+    background-color: #232323;
+}
+
+.profile img {
+    width: 48%;
+    height: auto;
+}
+
+.profile-images {
+    display: flex;
+    gap: 10px;
+}
+
+.profile h1 {
+    text-align: center;
+}
+
+.profile p {
+    text-align: center;
+    background-color: #232323;
+}
+
+.classes {
+    padding: 20px;
+    background-color: #232323;
+}
+
+.classes table {
+    width: 100%;
+    background-color: #232323;
+}
+
+.footer {
+    text-align: center;
+    padding: 20px;
+    background-color: #1E1E1E;
+    word-spacing: 30px;
+}
