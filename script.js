@@ -5,7 +5,7 @@ const gravity = 2; // gravity strength
 const bounceForce = 5;
 const sizeMax = 175;
 const sizeMin = 30;
-const startingCircles = 15
+const startingCircles = 10
 
 let mousePos = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 
