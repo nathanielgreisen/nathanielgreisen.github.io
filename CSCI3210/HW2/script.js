@@ -334,10 +334,13 @@ if (joinId) {
 }
 
 document.getElementById('mp-rematch').onclick = async () => {
-    startRematch();
+    await startRematch();
 };
 
 async function startRematch() {
+    oppBoard.innerHTML = '';
+    document.getElementById('mp-rematch').style.display = 'none';
+
     if (conn && conn.open) {
         await initBoard();
         conn.send({
