@@ -123,6 +123,7 @@ function hideGameSettings() {
     wordLengthSlider.closest('.slider-container').style.display = 'none';
     document.getElementById('mp-create').style.display = 'none';
     document.getElementById('mp-rematch').style.display = 'none';
+    document.getElementById('mp-join').style.display = 'none';
 }
 
 function checkGuess() {
@@ -274,6 +275,7 @@ function setupConn(c) {
             oppBoard.innerHTML = '';
             initBoard(msg.word);
             hideGameSettings();
+            document.getElementById('mp-leave').style.display = 'block';
             statusEl.textContent = 'Opponent connected!';
         }
         if (msg.type === 'guess') {
