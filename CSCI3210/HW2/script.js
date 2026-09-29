@@ -196,6 +196,9 @@ function checkGuess() {
     if (guessesRemaining === 0) {
         toastr.error("You've run out of guesses! Game over!");
         toastr.info(`The right word was: "${rightGuessString}"`);
+            if (conn && conn.open) {
+                conn.send({ type: 'failure' });
+            }
     }
 }
 
@@ -286,17 +289,23 @@ function setupConn(c) {
                 document.getElementById('mp-rematch').style.display = 'block';
             }
         }
+            if (msg.type === 'failure') {
+                toastr.warning('Your opponent ran out of guesses!');
+                document.getElementById('mp-rematch').style.display = 'block';
+            }
     });
     conn.on('close', () => statusEl.textContent = 'Opponent left.');
 }
 
 window.mpReport = (colors, solved) => {
-    if (conn && conn.open) conn.send({ type: 'guess', colors, solved });
+    if (conn && conn.open) {
+        conn.send({ type: 'guess', colors, solved });
+    }
 };
 
 // HOST
 document.getElementById('mp-create').onclick = () => {
-    peer = new Peer();
+    peer = new Peer(rightGuessString);
     peer.on('error', (e) => console.log('HOST PEER ERROR', e.type, e));
     peer.on('open', (id) => {
         const link = `${location.origin}${location.pathname}?join=${id}`;
