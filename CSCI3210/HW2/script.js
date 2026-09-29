@@ -305,6 +305,8 @@ document.getElementById('mp-create').onclick = () => {
                     guesses: NUMBER_OF_GUESSES, length: WORD_LENGTH
                 });
                 statusEl.textContent = 'Opponent connected!';
+                guessSlider.style.display = 'none';
+                wordLengthSlider.style.display = 'none';
             }, 1500);
         });
     });
