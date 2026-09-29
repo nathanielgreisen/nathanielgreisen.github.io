@@ -306,9 +306,12 @@ window.mpReport = (colors, solved) => {
 // HOST
 document.getElementById('mp-create').onclick = async () => {
     await initBoard();
-    const lobbyId = `${Math.random().toString(36).slice(2, 7)}`;
+    const lobbyId = Math.random().toString(36).slice(2, 7);
     peer = new Peer(lobbyId);
-    peer.on('error', (e) => console.log('HOST PEER ERROR', e.type, e));
+    peer.on('error', (e) => {
+        console.error('HOST PEER ERROR', e.type, e);
+        statusEl.textContent = `Unable to create lobby: ${e.type}`;
+    });
     peer.on('open', (id) => {
         const link = `${location.origin}${location.pathname}?join=${id}`;
         statusEl.textContent = 'Share this link: ' + link + '\nLink copied to clipboard!';
@@ -335,12 +338,20 @@ document.getElementById('mp-create').onclick = async () => {
 const joinId = new URLSearchParams(location.search).get('join');
 if (joinId) {
     peer = new Peer();
-    peer.on('error', (e) => { console.log('PEER ERROR', e.type, e); statusEl.textContent = 'Error: ' + e.type; });
+    peer.on('error', (e) => {
+        console.error('GUEST PEER ERROR', e.type, e);
+        statusEl.textContent = `Unable to join lobby: ${e.type}`;
+    });
     peer.on('open', (id) => {
-        console.log('guest peer open', id, 'connecting to', joinId);
-        setupConn(peer.connect(joinId, { reliable: true }));
+        const lobbyId = joinId.trim();
+        console.log('guest peer open', id, 'connecting to', lobbyId);
+        const connection = peer.connect(lobbyId, { reliable: true });
+        setupConn(connection);
         conn.on('open', () => console.log('guest: connection OPEN'));
-        conn.on('error', (e) => console.log('CONN ERROR', e));
+        conn.on('error', (e) => {
+            console.error('CONNECTION ERROR', e);
+            statusEl.textContent = `Unable to connect: ${e.type}`;
+        });
     });
 }
 
