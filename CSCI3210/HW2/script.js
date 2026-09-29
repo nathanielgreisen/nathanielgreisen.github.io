@@ -119,6 +119,11 @@ function resetKeyboard() {
     }
 }
 
+function hideGameSettings() {
+    guessSlider.closest('.slider-container').style.display = 'none';
+    wordLengthSlider.closest('.slider-container').style.display = 'none';
+}
+
 function checkGuess() {
     let row = document.getElementsByClassName('letter-row')[NUMBER_OF_GUESSES - guessesRemaining];
     let guessString = ''
@@ -264,6 +269,7 @@ function setupConn(c) {
             WORDS_URL = `https://raw.githubusercontent.com/mstgnz/words/main/lang/en/length/${WORD_LENGTH}_letter_words.txt`;
             oppBoard.innerHTML = '';
             initBoard(msg.word);
+            hideGameSettings();
             statusEl.textContent = 'Connected! Race to solve it.';
         }
         if (msg.type === 'guess') {
@@ -305,8 +311,7 @@ document.getElementById('mp-create').onclick = () => {
                     guesses: NUMBER_OF_GUESSES, length: WORD_LENGTH
                 });
                 statusEl.textContent = 'Opponent connected!';
-                guessSlider.style.display = 'none';
-                wordLengthSlider.style.display = 'none';
+                hideGameSettings();
             }, 1500);
         });
     });
