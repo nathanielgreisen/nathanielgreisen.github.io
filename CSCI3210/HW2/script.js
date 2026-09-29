@@ -10,7 +10,6 @@ let guessesRemaining = NUMBER_OF_GUESSES;
 let currentGuess = [];
 let nextLetter = 0;
 let rightGuessString = WORDS[Math.floor(Math.random() * WORDS.length)];
-console.log(rightGuessString);
 
 // This allows the user to change how many guesses they get
 guessSlider.addEventListener('input', (e) => {
@@ -34,13 +33,13 @@ async function loadWords() {
     .filter(w => w.length === WORD_LENGTH);
 }
 
-function initBoard() {
+function initBoard(forcedWord = null) {
     loadWords().then(() => {
         guessesRemaining = NUMBER_OF_GUESSES;
         document.getElementById('game-board').innerHTML = '';
         currentGuess = [];
         nextLetter = 0;
-        rightGuessString = WORDS[Math.floor(Math.random() * WORDS.length)];
+        rightGuessString = forcedWord || WORDS[Math.floor(Math.random() * WORDS.length)];
         resetKeyboard();
 
         let board = document.getElementById('game-board');
@@ -139,6 +138,7 @@ function checkGuess() {
         return;
     }
 
+    const colors = Array(WORD_LENGTH).fill(''); 
     for (let i = 0; i < WORD_LENGTH; i++) {
         let letterColor = '';
         let box = row.children[i];
@@ -163,6 +163,7 @@ function checkGuess() {
             rightGuess[letterPosition] = "#"
         }
 
+        colors[i] = letterColor;
         let delay = 250 * i
         setTimeout(() => {
             // flip box
@@ -171,6 +172,9 @@ function checkGuess() {
             box.style.backgroundColor = letterColor;
             shadeKeyBoard(letter, letterColor);
         }, delay);
+    }
+    if (window.mpReport) {
+        window.mpReport(colors, guessString === rightGuessString);
     }
 
     if (guessString === rightGuessString) {

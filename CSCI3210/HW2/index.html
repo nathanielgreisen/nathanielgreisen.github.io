@@ -12,6 +12,10 @@
 <body>
     <h1> Wordle Clone </h1>
 
+    <button id="mp-create">Create multiplayer game</button>
+    <div id="mp-status"></div>
+    <div id="opp-board"></div>
+
     <div class="slider-container">
         <label for="number-of-guesses">Number of guesses:</label>
         <input type="range" id="number-of-guesses" name="number-of-guesses" min="1" max="10" value="5">
@@ -62,11 +66,13 @@
         </div>
     </div>
 
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script
         src="https://code.jquery.com/jquery-3.6.0.min.js"
         integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4="
         crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
     <script src="script.js" type="module"></script>
+    <script src="multiplayer.js"></script> 
 </body>
 </html>
