@@ -24,13 +24,13 @@ wordLengthSlider.addEventListener('input', (e) => {
 });
 
 async function loadWords() {
-  const response = await fetch(WORDS_URL);
-  if (!response.ok) throw new Error(`Failed to load words: ${response.status}`);
-  const text = await response.text();
-  WORDS = text
-    .split(/\r?\n/)
-    .map(w => w.trim().toLowerCase())
-    .filter(w => w.length === WORD_LENGTH);
+    const response = await fetch(WORDS_URL);
+    if (!response.ok) throw new Error(`Failed to load words: ${response.status}`);
+    const text = await response.text();
+    WORDS = text
+        .split(/\r?\n/)
+        .map(w => w.trim().toLowerCase())
+        .filter(w => w.length === WORD_LENGTH);
 }
 
 function initBoard(forcedWord = null) {
@@ -60,7 +60,7 @@ function initBoard(forcedWord = null) {
 }
 
 function handleKey(pressedKey) {
-    if(guessesRemaining === 0) {
+    if (guessesRemaining === 0) {
         return;
     }
 
@@ -69,13 +69,13 @@ function handleKey(pressedKey) {
         return
     }
 
-    if(pressedKey === "Enter") {
+    if (pressedKey === "Enter") {
         checkGuess()
         return
     }
 
     let found = pressedKey.match(/[a-z]/gi)
-    if(!found || found.length > 1) {
+    if (!found || found.length > 1) {
         return
     } else {
         insertLetter(pressedKey)
@@ -124,11 +124,11 @@ function checkGuess() {
     let guessString = ''
     let rightGuess = Array.from(rightGuessString);
 
-    for(const val of currentGuess) {
+    for (const val of currentGuess) {
         guessString += val;
     }
 
-    if(guessString.length != WORD_LENGTH) {
+    if (guessString.length != WORD_LENGTH) {
         toastr.error("Not enough letters!")
         return;
     }
@@ -138,7 +138,7 @@ function checkGuess() {
         return;
     }
 
-    const colors = Array(WORD_LENGTH).fill(''); 
+    const colors = Array(WORD_LENGTH).fill('');
     for (let i = 0; i < WORD_LENGTH; i++) {
         let letterColor = '';
         let box = row.children[i];
