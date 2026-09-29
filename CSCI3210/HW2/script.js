@@ -1,27 +1,63 @@
-import { WORDS } from './words.js';
+let WORDS = [];
 
-const NUMBER_OF_GUESSES = 6;
+var guessSlider = document.getElementById('number-of-guesses');
+var wordLengthSlider = document.getElementById('word-length');
+let NUMBER_OF_GUESSES = parseInt(guessSlider.value);
+let WORD_LENGTH = parseInt(wordLengthSlider.value);
+
+let WORDS_URL = `https://raw.githubusercontent.com/mstgnz/words/main/lang/en/length/${WORD_LENGTH}_letter_words.txt`;
 let guessesRemaining = NUMBER_OF_GUESSES;
 let currentGuess = [];
 let nextLetter = 0;
 let rightGuessString = WORDS[Math.floor(Math.random() * WORDS.length)];
 console.log(rightGuessString);
 
+// This allows the user to change how many guesses they get
+guessSlider.addEventListener('input', (e) => {
+    NUMBER_OF_GUESSES = parseInt(e.target.value);
+    initBoard();
+});
+
+wordLengthSlider.addEventListener('input', (e) => {
+    WORD_LENGTH = parseInt(e.target.value);
+    WORDS_URL = `https://raw.githubusercontent.com/mstgnz/words/main/lang/en/length/${WORD_LENGTH}_letter_words.txt`;
+    initBoard();
+});
+
+async function loadWords() {
+  const response = await fetch(WORDS_URL);
+  if (!response.ok) throw new Error(`Failed to load words: ${response.status}`);
+  const text = await response.text();
+  WORDS = text
+    .split(/\r?\n/)
+    .map(w => w.trim().toLowerCase())
+    .filter(w => w.length === WORD_LENGTH);
+}
+
 function initBoard() {
-    let board = document.getElementById('game-board');
+    loadWords().then(() => {
+        guessesRemaining = NUMBER_OF_GUESSES;
+        document.getElementById('game-board').innerHTML = '';
+        currentGuess = [];
+        nextLetter = 0;
+        rightGuessString = WORDS[Math.floor(Math.random() * WORDS.length)];
+        resetKeyboard();
 
-    for (let i = 0; i < NUMBER_OF_GUESSES; i++) {
-        let row = document.createElement('div');
-        row.className = 'letter-row';
+        let board = document.getElementById('game-board');
 
-        for (let j = 0; j < 5; j++) {
-            let box = document.createElement('div');
-            box.className = 'letter-box';
-            row.appendChild(box);
+        for (let i = 0; i < NUMBER_OF_GUESSES; i++) {
+            let row = document.createElement('div');
+            row.className = 'letter-row';
+
+            for (let j = 0; j < WORD_LENGTH; j++) {
+                let box = document.createElement('div');
+                box.className = 'letter-box';
+                row.appendChild(box);
+            }
+
+            board.appendChild(row);
         }
-
-        board.appendChild(row);
-    }
+    });
 }
 
 function handleKey(pressedKey) {
@@ -55,7 +91,7 @@ document.addEventListener("keydown", (e) => {
 });
 
 function insertLetter(pressedKey) {
-    if (nextLetter === 5) {
+    if (nextLetter === WORD_LENGTH) {
         return;
     }
     pressedKey = pressedKey.toLowerCase();
@@ -78,6 +114,12 @@ function deleteLetter() {
     nextLetter -= 1;
 }
 
+function resetKeyboard() {
+    for (const key of document.getElementsByClassName('key')) {
+        key.style.backgroundColor = '';
+    }
+}
+
 function checkGuess() {
     let row = document.getElementsByClassName('letter-row')[NUMBER_OF_GUESSES - guessesRemaining];
     let guessString = ''
@@ -87,7 +129,7 @@ function checkGuess() {
         guessString += val;
     }
 
-    if(guessString.length != 5) {
+    if(guessString.length != WORD_LENGTH) {
         toastr.error("Not enough letters!")
         return;
     }
@@ -97,7 +139,7 @@ function checkGuess() {
         return;
     }
 
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < WORD_LENGTH; i++) {
         let letterColor = '';
         let box = row.children[i];
         let letter = currentGuess[i];
