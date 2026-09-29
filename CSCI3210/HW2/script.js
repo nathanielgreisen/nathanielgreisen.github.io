@@ -274,7 +274,7 @@ function setupConn(c) {
             oppBoard.innerHTML = '';
             initBoard(msg.word);
             hideGameSettings();
-            statusEl.textContent = 'Connected! Race to solve it.';
+            statusEl.textContent = 'Opponent connected!';
         }
         if (msg.type === 'guess') {
             const row = document.createElement('div');
@@ -361,5 +361,12 @@ async function startRematch() {
         hideGameSettings();
     }
 }
+
+document.getElementById('mp-join').onclick = () => {
+    const joinId = prompt('Enter the ID of the game to join:');
+    if (joinId) {
+        location.search = '?join=' + joinId;
+    }
+};
 
 initBoard();
