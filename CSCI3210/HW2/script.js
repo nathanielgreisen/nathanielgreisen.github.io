@@ -309,7 +309,7 @@ window.mpReport = (colors, solved) => {
 document.getElementById('mp-create').onclick = async () => {
     await initBoard();
     const lobbyId = Math.random().toString(36).slice(2, 7);
-    peer = new Peer(lobbyId);
+    peer = new Peer(lobbyId, { debug: 3 });
     peer.on('error', (e) => {
         console.error('HOST PEER ERROR', e.type, e);
         statusEl.textContent = `Unable to create lobby: ${e.type}`;
@@ -338,23 +338,43 @@ document.getElementById('mp-create').onclick = async () => {
 
 // GUEST
 const joinId = new URLSearchParams(location.search).get('join');
+
+console.log('Join code from URL:', joinId);
 if (joinId) {
-    peer = new Peer();
-    peer.on('error', (e) => {
-        console.error('GUEST PEER ERROR', e.type, e);
-        statusEl.textContent = `Unable to join lobby: ${e.type}`;
+  statusEl.textContent = 'Contacting PeerJS...';
+
+  peer = new Peer({ debug: 3 });
+
+  peer.on('error', (e) => {
+    console.error('GUEST PEER ERROR', e);
+    statusEl.textContent = `Join error: ${e.type}`;
+  });
+
+  peer.on('open', (id) => {
+    console.log('Guest registered:', id);
+    statusEl.textContent = `Connecting to ${joinId.trim()}...`;
+
+    const connection = peer.connect(joinId.trim(), { reliable: true });
+    setupConn(connection);
+
+    const timeout = setTimeout(() => {
+      if (!connection.open) {
+        statusEl.textContent = 'Connection timed out. Check both consoles.';
+      }
+    }, 15000);
+
+    connection.on('open', () => {
+      clearTimeout(timeout);
+      console.log('Guest connection open');
+      statusEl.textContent = 'Connected; waiting for game...';
     });
-    peer.on('open', (id) => {
-        const lobbyId = joinId.trim();
-        console.log('guest peer open', id, 'connecting to', lobbyId);
-        const connection = peer.connect(lobbyId, { reliable: true });
-        setupConn(connection);
-        conn.on('open', () => console.log('guest: connection OPEN'));
-        conn.on('error', (e) => {
-            console.error('CONNECTION ERROR', e);
-            statusEl.textContent = `Unable to connect: ${e.type}`;
-        });
+
+    connection.on('error', (e) => {
+      clearTimeout(timeout);
+      console.error('CONNECTION ERROR', e);
+      statusEl.textContent = `Connection error: ${e.message}`;
     });
+  });
 }
 
 document.getElementById('mp-rematch').onclick = async () => {
@@ -382,6 +402,13 @@ document.getElementById('mp-join').onclick = () => {
     if (joinId) {
         location.search = '?join=' + joinId;
     }
+};
+
+document.getElementById('mp-leave').onclick = () => {
+    if (conn && conn.open) {
+        conn.close();
+    }
+    location.reload();
 };
 
 initBoard();
