@@ -11,6 +11,20 @@ let currentGuess = [];
 let nextLetter = 0;
 let rightGuessString = WORDS[Math.floor(Math.random() * WORDS.length)];
 
+// This should fix CBU's blocking
+const peerOptions = {
+  config: {
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      {
+        urls: "turns:YOUR_TURN_HOST:443?transport=tcp",
+        username: "YOUR_USERNAME",
+        credential: "YOUR_PASSWORD"
+      }
+    ]
+  }
+};
+
 // This allows the user to change how many guesses they get
 guessSlider.addEventListener('input', (e) => {
     NUMBER_OF_GUESSES = parseInt(e.target.value);
@@ -309,7 +323,7 @@ window.mpReport = (colors, solved) => {
 document.getElementById('mp-create').onclick = async () => {
     await initBoard();
     const lobbyId = Math.random().toString(36).slice(2, 7);
-    peer = new Peer(lobbyId, { debug: 3 });
+    peer = new Peer(lobbyId, peerOptions);
     peer.on('error', (e) => {
         console.error('HOST PEER ERROR', e.type, e);
         statusEl.textContent = `Unable to create lobby: ${e.type}`;
@@ -343,7 +357,7 @@ console.log('Join code from URL:', joinId);
 if (joinId) {
   statusEl.textContent = 'Contacting PeerJS...';
 
-  peer = new Peer({ debug: 3 });
+  peer = new Peer(peerOptions);
 
   peer.on('error', (e) => {
     console.error('GUEST PEER ERROR', e);
