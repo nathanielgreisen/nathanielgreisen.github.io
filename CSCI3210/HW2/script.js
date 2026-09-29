@@ -304,8 +304,10 @@ window.mpReport = (colors, solved) => {
 };
 
 // HOST
-document.getElementById('mp-create').onclick = () => {
-    peer = new Peer(rightGuessString);
+document.getElementById('mp-create').onclick = async () => {
+    await initBoard();
+    const lobbyId = `${Math.random().toString(36).slice(2, 7)}`;
+    peer = new Peer(lobbyId);
     peer.on('error', (e) => console.log('HOST PEER ERROR', e.type, e));
     peer.on('open', (id) => {
         const link = `${location.origin}${location.pathname}?join=${id}`;
