@@ -33,30 +33,29 @@ async function loadWords() {
         .filter(w => w.length === WORD_LENGTH);
 }
 
-function initBoard(forcedWord = null) {
-    loadWords().then(() => {
-        guessesRemaining = NUMBER_OF_GUESSES;
-        document.getElementById('game-board').innerHTML = '';
-        currentGuess = [];
-        nextLetter = 0;
-        rightGuessString = forcedWord || WORDS[Math.floor(Math.random() * WORDS.length)];
-        resetKeyboard();
+async function initBoard(forcedWord = null) {
+    await loadWords();
+    guessesRemaining = NUMBER_OF_GUESSES;
+    document.getElementById('game-board').innerHTML = '';
+    currentGuess = [];
+    nextLetter = 0;
+    rightGuessString = forcedWord || WORDS[Math.floor(Math.random() * WORDS.length)];
+    resetKeyboard();
 
-        let board = document.getElementById('game-board');
+    let board = document.getElementById('game-board');
 
-        for (let i = 0; i < NUMBER_OF_GUESSES; i++) {
-            let row = document.createElement('div');
-            row.className = 'letter-row';
+    for (let i = 0; i < NUMBER_OF_GUESSES; i++) {
+        let row = document.createElement('div');
+        row.className = 'letter-row';
 
-            for (let j = 0; j < WORD_LENGTH; j++) {
-                let box = document.createElement('div');
-                box.className = 'letter-box';
-                row.appendChild(box);
-            }
-
-            board.appendChild(row);
+        for (let j = 0; j < WORD_LENGTH; j++) {
+            let box = document.createElement('div');
+            box.className = 'letter-box';
+            row.appendChild(box);
         }
-    });
+
+        board.appendChild(row);
+    }
 }
 
 function handleKey(pressedKey) {
@@ -122,6 +121,8 @@ function resetKeyboard() {
 function hideGameSettings() {
     guessSlider.closest('.slider-container').style.display = 'none';
     wordLengthSlider.closest('.slider-container').style.display = 'none';
+    document.getElementById('mp-create').style.display = 'none';
+    document.getElementById('mp-rematch').style.display = 'none';
 }
 
 function checkGuess() {
@@ -280,7 +281,10 @@ function setupConn(c) {
                 row.appendChild(b);
             });
             oppBoard.appendChild(row);
-            if (msg.solved) toastr.warning('Your opponent solved it first!');
+            if (msg.solved) {
+                toastr.warning('Your opponent solved it first!');
+                document.getElementById('mp-rematch').style.display = 'block';
+            }
         }
     });
     conn.on('close', () => statusEl.textContent = 'Opponent left.');
@@ -296,7 +300,7 @@ document.getElementById('mp-create').onclick = () => {
     peer.on('error', (e) => console.log('HOST PEER ERROR', e.type, e));
     peer.on('open', (id) => {
         const link = `${location.origin}${location.pathname}?join=${id}`;
-        statusEl.textContent = 'Share this link: ' + link;
+        statusEl.textContent = 'Share this link: ' + link + '\nLink copied to clipboard!';
         navigator.clipboard?.writeText(link);
     });
     peer.on('connection', (c) => {
@@ -304,15 +308,14 @@ document.getElementById('mp-create').onclick = () => {
         setupConn(c);
         c.on('open', () => {
             // wait until the word list is loaded, then pick the word
-            initBoard();
-            setTimeout(() => {
+            initBoard().then(() => {
                 c.send({
                     type: 'start', word: rightGuessString,
                     guesses: NUMBER_OF_GUESSES, length: WORD_LENGTH
                 });
                 statusEl.textContent = 'Opponent connected!';
                 hideGameSettings();
-            }, 1500);
+            });
         });
     });
 };
@@ -328,6 +331,23 @@ if (joinId) {
         conn.on('open', () => console.log('guest: connection OPEN'));
         conn.on('error', (e) => console.log('CONN ERROR', e));
     });
+}
+
+document.getElementById('mp-rematch').onclick = async () => {
+    startRematch();
+};
+
+async function startRematch() {
+    if (conn && conn.open) {
+        await initBoard();
+        conn.send({
+            type: 'start',
+            word: rightGuessString,
+            guesses: NUMBER_OF_GUESSES,
+            length: WORD_LENGTH
+        });
+        hideGameSettings();
+    }
 }
 
 initBoard();
