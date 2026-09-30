@@ -23,7 +23,7 @@ function initPage() {
 
 document.addEventListener('DOMContentLoaded', initPage);
 
-// This should fix CBU's blocking
+// This should fix CBU's network blocking
 const peerOptions = {
     config: {
         iceServers: [
