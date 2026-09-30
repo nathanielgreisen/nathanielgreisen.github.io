@@ -13,16 +13,16 @@ let rightGuessString = WORDS[Math.floor(Math.random() * WORDS.length)];
 
 // This should fix CBU's blocking
 const peerOptions = {
-  config: {
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      {
-        urls: "turns:YOUR_TURN_HOST:443?transport=tcp",
-        username: "YOUR_USERNAME",
-        credential: "YOUR_PASSWORD"
-      }
-    ]
-  }
+    config: {
+        iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            {
+                urls: "turns:standard.relay.metered.ca:443?transport=tcp",
+                username: "564a2f5dae156ca13997d765",
+                credential: "5cSRQVxEpZDw/Ggf",
+            }
+        ]
+    }
 };
 
 // This allows the user to change how many guesses they get
@@ -211,9 +211,9 @@ function checkGuess() {
     if (guessesRemaining === 0) {
         toastr.error("You've run out of guesses! Game over!");
         toastr.info(`The right word was: "${rightGuessString}"`);
-            if (conn && conn.open) {
-                conn.send({ type: 'failure' });
-            }
+        if (conn && conn.open) {
+            conn.send({ type: 'failure' });
+        }
     }
 }
 
@@ -305,10 +305,10 @@ function setupConn(c) {
                 document.getElementById('mp-rematch').style.display = 'block';
             }
         }
-            if (msg.type === 'failure') {
-                toastr.warning('Your opponent ran out of guesses!');
-                document.getElementById('mp-rematch').style.display = 'block';
-            }
+        if (msg.type === 'failure') {
+            toastr.warning('Your opponent ran out of guesses!');
+            document.getElementById('mp-rematch').style.display = 'block';
+        }
     });
     conn.on('close', () => statusEl.textContent = 'Opponent left.');
 }
@@ -355,40 +355,40 @@ const joinId = new URLSearchParams(location.search).get('join');
 
 console.log('Join code from URL:', joinId);
 if (joinId) {
-  statusEl.textContent = 'Contacting PeerJS...';
+    statusEl.textContent = 'Contacting PeerJS...';
 
-  peer = new Peer(peerOptions);
+    peer = new Peer(peerOptions);
 
-  peer.on('error', (e) => {
-    console.error('GUEST PEER ERROR', e);
-    statusEl.textContent = `Join error: ${e.type}`;
-  });
-
-  peer.on('open', (id) => {
-    console.log('Guest registered:', id);
-    statusEl.textContent = `Connecting to ${joinId.trim()}...`;
-
-    const connection = peer.connect(joinId.trim(), { reliable: true });
-    setupConn(connection);
-
-    const timeout = setTimeout(() => {
-      if (!connection.open) {
-        statusEl.textContent = 'Connection timed out. Check both consoles.';
-      }
-    }, 15000);
-
-    connection.on('open', () => {
-      clearTimeout(timeout);
-      console.log('Guest connection open');
-      statusEl.textContent = 'Connected; waiting for game...';
+    peer.on('error', (e) => {
+        console.error('GUEST PEER ERROR', e);
+        statusEl.textContent = `Join error: ${e.type}`;
     });
 
-    connection.on('error', (e) => {
-      clearTimeout(timeout);
-      console.error('CONNECTION ERROR', e);
-      statusEl.textContent = `Connection error: ${e.message}`;
+    peer.on('open', (id) => {
+        console.log('Guest registered:', id);
+        statusEl.textContent = `Connecting to ${joinId.trim()}...`;
+
+        const connection = peer.connect(joinId.trim(), { reliable: true });
+        setupConn(connection);
+
+        const timeout = setTimeout(() => {
+            if (!connection.open) {
+                statusEl.textContent = 'Connection timed out. Check both consoles.';
+            }
+        }, 15000);
+
+        connection.on('open', () => {
+            clearTimeout(timeout);
+            console.log('Guest connection open');
+            statusEl.textContent = 'Connected; waiting for game...';
+        });
+
+        connection.on('error', (e) => {
+            clearTimeout(timeout);
+            console.error('CONNECTION ERROR', e);
+            statusEl.textContent = `Connection error: ${e.message}`;
+        });
     });
-  });
 }
 
 document.getElementById('mp-rematch').onclick = async () => {
