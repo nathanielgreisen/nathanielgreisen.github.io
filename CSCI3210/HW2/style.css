@@ -61,3 +61,64 @@ h1 {
 #mp-leave {
     display: none;
 }
+
+#mp-restart {
+    display: none;
+    margin: 1rem auto;
+}
+
+#settings-dialog {
+    width: min(420px, calc(100vw - 64px));
+    max-height: calc(100vh - 64px);
+    box-sizing: border-box;
+    overflow-y: auto;
+
+    padding: 28px;
+    margin: auto;
+
+    background: white;
+    color: #222;
+    border: none;
+    border-radius: 12px;
+
+    box-shadow: 0 12px 40px rgb(0 0 0 / 20%);
+    font-family: Arial, sans-serif;
+}
+
+/* The layer covering the page behind the dialog */
+#settings-dialog::backdrop {
+    background: rgb(160 160 160 / 55%);
+}
+
+#settings-dialog h2 {
+    margin-top: 0;
+    text-align: center;
+}
+
+#settings-dialog .slider-container {
+    margin: 20px 0;
+}
+
+#settings-dialog input[type="range"] {
+    width: 100%;
+}
+
+.settings-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 24px;
+}
+
+.settings-buttons button {
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #f3f3f3;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+.settings-buttons button:hover {
+    background: #e3e3e3;
+}

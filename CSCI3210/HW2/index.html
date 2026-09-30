@@ -13,23 +13,33 @@
 
 <body>
     <h1> Wordle Clone </h1>
+    <dialog id="settings-dialog" aria-labelledby="settings-title">
+        <h2 id="settings-title">Game settings</h2>
 
-    <button id="mp-create">Create multiplayer game</button>
-    <button id="mp-join">Join multiplayer game</button>
+        <div class="slider-container">
+            <label for="number-of-guesses">Number of guesses (<span id="number-of-guesses-value">5</span>):</label>
+            <input type="range" id="number-of-guesses" name="number-of-guesses" min="1" max="10" value="6">
+        </div>
+
+        <div class="slider-container">
+            <label for="word-length">Word length (<span id="word-length-value">5</span>):</label>
+            <input type="range" id="word-length" name="word-length" min="1" max="25" value="5">
+        </div>
+
+        <div class="settings-buttons">
+            <button id="start-singleplayer" type="button">Play singleplayer</button>
+            <button id="mp-create">Create multiplayer game</button>
+            <button id="mp-join">Join multiplayer game</button>
+        </div>
+    </dialog>
+
+
     <button id="mp-rematch">Rematch</button>
     <button id="mp-leave">Leave Game</button>
     <div id="mp-status"></div>
     <div id="opp-board"></div>
 
-    <div class="slider-container">
-        <label for="number-of-guesses">Number of guesses:</label>
-        <input type="range" id="number-of-guesses" name="number-of-guesses" min="1" max="10" value="5">
-    </div>
 
-    <div class="slider-container">
-        <label for="word-length">Word length:</label>
-        <input type="range" id="word-length" name="word-length" min="1" max="25" value="5">
-    </div>
 
     <div id="game-board">
     </div>
@@ -70,6 +80,8 @@
             <button class="key">Enter</button>
         </div>
     </div>
+
+    <button id="mp-restart">New Game</button>
 
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"

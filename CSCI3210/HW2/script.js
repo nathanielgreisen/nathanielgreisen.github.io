@@ -2,14 +2,26 @@ let WORDS = [];
 
 var guessSlider = document.getElementById('number-of-guesses');
 var wordLengthSlider = document.getElementById('word-length');
+var guessValue = document.getElementById('number-of-guesses-value');
+var wordLengthValue = document.getElementById('word-length-value');
 let NUMBER_OF_GUESSES = parseInt(guessSlider.value);
 let WORD_LENGTH = parseInt(wordLengthSlider.value);
+
+guessValue.textContent = guessSlider.value;
+wordLengthValue.textContent = wordLengthSlider.value;
 
 let WORDS_URL = `https://raw.githubusercontent.com/mstgnz/words/main/lang/en/length/${WORD_LENGTH}_letter_words.txt`;
 let guessesRemaining = NUMBER_OF_GUESSES;
 let currentGuess = [];
 let nextLetter = 0;
 let rightGuessString = WORDS[Math.floor(Math.random() * WORDS.length)];
+
+// Page initialization
+function initPage() {
+    initBoard();
+}
+
+document.addEventListener('DOMContentLoaded', initPage);
 
 // This should fix CBU's blocking
 const peerOptions = {
@@ -28,13 +40,13 @@ const peerOptions = {
 // This allows the user to change how many guesses they get
 guessSlider.addEventListener('input', (e) => {
     NUMBER_OF_GUESSES = parseInt(e.target.value);
-    initBoard();
+    guessValue.textContent = e.target.value;
 });
 
 wordLengthSlider.addEventListener('input', (e) => {
     WORD_LENGTH = parseInt(e.target.value);
+    wordLengthValue.textContent = e.target.value;
     WORDS_URL = `https://raw.githubusercontent.com/mstgnz/words/main/lang/en/length/${WORD_LENGTH}_letter_words.txt`;
-    initBoard();
 });
 
 async function loadWords() {
@@ -73,6 +85,7 @@ async function initBoard(forcedWord = null) {
 }
 
 function handleKey(pressedKey) {
+    if (settingsDialog.open) return;
     if (guessesRemaining === 0) {
         return;
     }
@@ -96,6 +109,7 @@ function handleKey(pressedKey) {
 }
 
 document.addEventListener("keydown", (e) => {
+    if (settingsDialog.open) return;
     if (e.key === "Backspace" || e.key === "Enter" || /^[a-z]$/i.test(e.key)) {
         e.preventDefault();
     }
@@ -133,11 +147,8 @@ function resetKeyboard() {
 }
 
 function hideGameSettings() {
-    guessSlider.closest('.slider-container').style.display = 'none';
-    wordLengthSlider.closest('.slider-container').style.display = 'none';
-    document.getElementById('mp-create').style.display = 'none';
-    document.getElementById('mp-rematch').style.display = 'none';
-    document.getElementById('mp-join').style.display = 'none';
+    settingsDialog.close();
+    document.getElementById("mp-rematch").style.display = "none";
 }
 
 function checkGuess() {
@@ -201,6 +212,9 @@ function checkGuess() {
     if (guessString === rightGuessString) {
         toastr.success("You guessed right! Game over!");
         guessesRemaining = 0;
+        if (!conn) {
+            newGameButton.style.display = "block";
+        }
         return;
     }
 
@@ -211,6 +225,9 @@ function checkGuess() {
     if (guessesRemaining === 0) {
         toastr.error("You've run out of guesses! Game over!");
         toastr.info(`The right word was: "${rightGuessString}"`);
+        if (!conn) {
+            newGameButton.style.display = "block";
+        }
         if (conn && conn.open) {
             conn.send({ type: 'failure' });
         }
@@ -322,6 +339,7 @@ window.mpReport = (colors, solved) => {
 // HOST
 document.getElementById('mp-create').onclick = async () => {
     await initBoard();
+    settingsDialog.close();
     const lobbyId = Math.random().toString(36).slice(2, 7);
     peer = new Peer(lobbyId, peerOptions);
     peer.on('error', (e) => {
@@ -422,7 +440,40 @@ document.getElementById('mp-leave').onclick = () => {
     if (conn && conn.open) {
         conn.close();
     }
-    location.reload();
+    location.href = location.pathname;
 };
 
-initBoard();
+const settingsDialog = document.getElementById("settings-dialog");
+const singleplayerButton = document.getElementById("start-singleplayer");
+const newGameButton = document.getElementById("mp-restart");
+
+newGameButton.addEventListener("click", () => {
+    location.href = location.pathname;
+});
+
+// Show settings on an ordinary visit.
+// A multiplayer invitation already gets its settings from the host.
+if (!joinId) {
+    settingsDialog.showModal();
+}
+
+// Require the player to choose a mode instead of dismissing with Escape.
+settingsDialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+});
+
+singleplayerButton.addEventListener("click", async () => {
+    singleplayerButton.disabled = true;
+
+    try {
+        await initBoard();
+        settingsDialog.close();
+    } catch (error) {
+        console.error(error);
+        toastr.error("Could not load the word list. Please try again.");
+    } finally {
+        singleplayerButton.disabled = false;
+    }
+});
+
+initPage();
