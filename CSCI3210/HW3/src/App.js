@@ -3,6 +3,15 @@ import "./App.css";
 import Food from "./components/Food";
 import Snake from "./components/Snake";
 
+/* Added functions:
+ 1: Improved Snake movement
+    - I thought the movement felt blocky, so I added a "queue" where
+    - if the user pressed two arrow keys quickly, it would add the second
+    - one to the queue, and would then happen on the next frame. This
+    - made movement feel much smoother. The snake also can no longer
+    - reverse directions and pass through itself.
+ 2: 
+*/
 const randomFoodPosition = () => {
   const pos = { x: 0, y: 0 };
   let x = Math.floor(Math.random() * 96);
@@ -29,28 +38,56 @@ function App() {
   const [isStarted, setIsStarted] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const playgroundRef = useRef();
+  const oppositeDirections = {
+      ArrowUp: "ArrowDown",
+      ArrowRight: "ArrowLeft",
+      ArrowDown: "ArrowUp",
+      ArrowLeft: "ArrowRight",
+    };
+  const directionQueue = useRef([]);
+  const currentDirection = useRef(initialSnake.direction);
+
+  const handleKeyDown = (event) => {
+    const nextDirection = event.key;
+    
+    if (!oppositeDirections[nextDirection]){
+      return;
+    }
+
+    const lastQueuedDirection = 
+      directionQueue.current[directionQueue.current.length -1] ??
+      currentDirection.current;
+
+    if ( // ignore opposites and duplicate directions
+      nextDirection === lastQueuedDirection ||
+      nextDirection === oppositeDirections[lastQueuedDirection]
+    ) {
+      return;
+    }
+    
+
+    directionQueue.current.push(nextDirection);
+  };
 
   useEffect(() => {
     if (!isStarted) return;
 
-    if (
-      snake[snake.length - 1].x === 100 ||
-      snake[snake.length - 1].x === 0 ||
-      snake[snake.length - 1].y === 100 ||
-      snake[snake.length - 1].y === -4
-    ) {
-      setGameOver(true);
-      return;
-    }
     const interval = setInterval(move, initialSnake.speed);
     return () => clearInterval(interval);
   });
 
   const move = () => {
+    const nextDirection = 
+      directionQueue.current.shift() ?? currentDirection.current;
+
+    currentDirection.current = nextDirection;
+    setLastDirection(nextDirection);
+
     const tmpSnake = [...snake];
-    let x = tmpSnake[tmpSnake.length - 1].x,
-      y = tmpSnake[tmpSnake.length - 1].y;
-    switch (lastDirection) {
+    let x = tmpSnake[tmpSnake.length - 1].x;
+    let y = tmpSnake[tmpSnake.length - 1].y;
+
+    switch (nextDirection) {
       case "ArrowUp":
         y -= 4;
         break;
@@ -67,6 +104,13 @@ function App() {
         break;
     }
 
+    if (x > 100 || x < 0 || y > 100 || y < 0) {
+      setGameOver(true);
+      setIsStarted(false);
+      directionQueue.current = [];
+      return;
+    }
+
     tmpSnake.push({
       x,
       y,
@@ -79,13 +123,13 @@ function App() {
   return (
     <div
       className="App"
-      onKeyDown={(e) => setLastDirection(e.key)}
+      onKeyDown={handleKeyDown}
       ref={playgroundRef}
       tabIndex={0}
     >
       {isStarted && <div className="count"> score: {snake.length - 3}</div>}
 
-      {!isStarted && (
+      {!isStarted && !gameOver && (
         <>
           <button
             onClick={() => {
@@ -109,6 +153,8 @@ function App() {
               setSnake(initialSnake.snake);
               setLastDirection(initialSnake.direction);
               playgroundRef.current.focus();
+              currentDirection.current = initialSnake.direction;
+              directionQueue.current = [];
             }}
             type="submit"
           >
