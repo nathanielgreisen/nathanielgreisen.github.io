@@ -116,7 +116,17 @@ function App() {
       y,
     });
     if (x !== foodPosition.x || y !== foodPosition.y) tmpSnake.shift();
-    else setFoodPosition(randomFoodPosition());
+
+    if (tmpSnake.slice(0, -1).some((part) => part.x === x && part.y === y)) {
+      setGameOver(true);
+      setIsStarted(false);
+      directionQueue.current = [];
+      return;
+    }
+
+    if (x === foodPosition.x && y === foodPosition.y) {
+      setFoodPosition(randomFoodPosition());
+    }
     setSnake(tmpSnake);
   };
 
