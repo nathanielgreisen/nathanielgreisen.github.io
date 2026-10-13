@@ -1,20 +1,10 @@
-import React from "react";
-
-function Food({ position }) {
-  return (
-    <div
-      style={{
-        width: "15px",
-        height: "15px",
-        backgroundColor: "#3dd1e7",
-        margin: "3px",
-        position: "absolute",
-        left: `${position.x}%`,
-        top: `${position.y}%`,
-        zIndex: 0,
-      }}
-    />
-  );
+function Food({ position, fieldSize }) {
+  return <div className="food-cell" style={{
+    left: `${position.x * 100 / fieldSize}%`,
+    top: `${position.y * 100 / fieldSize}%`,
+    width: `${100 / fieldSize}%`,
+    height: `${100 / fieldSize}%`,
+  }} />;
 }
 
 export default Food;

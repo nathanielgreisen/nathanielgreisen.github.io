@@ -1,24 +1,12 @@
-import React from "react";
-
-function Snake({ snake }) {
-  return (
-    <div>
-      {snake.map((box, i) => (
-        <div
-          style={{
-            width: "15px",
-            height: "15px",
-            backgroundColor: "#e7da3d",
-            margin: "5px",
-            position: "absolute",
-            left: `${box.x}%`,
-            top: `${box.y}%`,
-            zIndex: 1,
-          }}
-        />
-      ))}
-    </div>
-  );
+function Snake({ snake, fieldSize }) {
+  return snake.map((box, i) => (
+    <div key={i} className="snake-cell" style={{
+      left: `${box.x * 100 / fieldSize}%`,
+      top: `${box.y * 100 / fieldSize}%`,
+      width: `${100 / fieldSize}%`,
+      height: `${100 / fieldSize}%`,
+    }} />
+  ));
 }
 
 export default Snake;
