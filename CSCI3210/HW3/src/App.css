@@ -26,27 +26,59 @@ button {
   cursor: pointer;
 }
 
-.text, .count {
+.text,
+.count {
   color: #eb2d2d;
   opacity: 0.5;
   z-index: 4;
 }
 
-.arrow-msg { font-size: 1rem; margin: 10px; text-align: center; }
-.game-over { font-size: 3rem; text-align: center; }
-.change-settings { font-size: 1rem; margin-top: 10px; }
-.leave-game { display: block; margin: auto; height: 36px; font-size: 1rem; }
-.count { position: absolute; bottom: 0; font-size: 1.5rem; pointer-events: none; }
+.arrow-msg {
+  font-size: 1rem;
+  margin: 10px;
+  text-align: center;
+}
 
-.snake-cell, .food-cell {
+.game-over {
+  font-size: 3rem;
+  text-align: center;
+}
+
+.change-settings {
+  font-size: 1rem;
+  margin-top: 10px;
+}
+
+.leave-game {
+  display: block;
+  margin: auto;
+  height: 36px;
+  font-size: 1rem;
+}
+
+.count {
+  position: absolute;
+  bottom: 0;
+  font-size: 1.5rem;
+  pointer-events: none;
+}
+
+.snake-cell,
+.food-cell {
   position: absolute;
   box-sizing: border-box;
   border: 2px solid black;
   pointer-events: none;
 }
 
-.snake-cell { background: #e7da3d; z-index: 1; }
-.food-cell { background: #3dd1e7; }
+.snake-cell {
+  background: #e7da3d;
+  z-index: 1;
+}
+
+.food-cell {
+  background: #3dd1e7;
+}
 
 #settings-dialog {
   width: min(420px, calc(100vw - 64px));
@@ -63,13 +95,31 @@ button {
   font-family: Arial, sans-serif;
 }
 
-#settings-dialog::backdrop { background: rgb(0 0 0 / 70%); }
-#settings-dialog h2 { margin-top: 0; text-align: center; }
-#settings-dialog p { line-height: 1.4; overflow-wrap: anywhere; }
-.slider-container { margin: 20px 0; }
-#settings-dialog input[type="range"] { width: 100%; accent-color: #e73d9f; }
+#settings-dialog::backdrop {
+  background: rgb(0 0 0 / 70%);
+}
 
-#settings-dialog input:not([type="range"]), #settings-dialog select {
+#settings-dialog h2 {
+  margin-top: 0;
+  text-align: center;
+}
+
+#settings-dialog p {
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.slider-container {
+  margin: 20px 0;
+}
+
+#settings-dialog input[type="range"] {
+  width: 100%;
+  accent-color: #e73d9f;
+}
+
+#settings-dialog input:not([type="range"]),
+#settings-dialog select {
   box-sizing: border-box;
   width: 100%;
   padding: 8px;
@@ -81,7 +131,13 @@ button {
   font: inherit;
 }
 
-.settings-buttons { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+.settings-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+}
+
 .settings-buttons button {
   width: 100%;
   max-width: none;
@@ -94,5 +150,12 @@ button {
   font-size: 1rem;
   font-weight: 400;
 }
-.settings-buttons button:hover { background: #363636; }
-#settings-dialog :focus-visible { outline: 2px solid #e73d9f; outline-offset: 3px; }
+
+.settings-buttons button:hover {
+  background: #363636;
+}
+
+#settings-dialog :focus-visible {
+  outline: 2px solid #e73d9f;
+  outline-offset: 3px;
+}
