@@ -29,6 +29,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'canvas.middleware.PixelCooldownMiddleware',
 ]
 ROOT_URLCONF = 'config.urls'
 TEMPLATES = [{
@@ -60,6 +61,8 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PERMISSION_CLASSES': ['rest_framework.permissions.IsAuthenticated'],
     'DEFAULT_RENDERER_CLASSES': ['rest_framework.renderers.JSONRenderer'],
+    'EXCEPTION_HANDLER': 'canvas.exceptions.exception_handler',
+
 }
 REDIS_URL = os.getenv('REDIS_URL', 'redis://127.0.0.1:6379/0')
 LANGUAGE_CODE = 'en-us'
