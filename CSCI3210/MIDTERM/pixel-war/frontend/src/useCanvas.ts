@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, errorMessage } from './api';
 import { readEvent } from './types';
 import type { PixelEvent, Snapshot } from './types';
+import { socketUrl } from './deployment';
 
 export function useCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -91,8 +92,7 @@ export function useCanvas() {
 
     function connect() {
       if (disposed) return;
-      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const connection = new WebSocket(`${protocol}//${location.host}/ws/canvas/1/`);
+      const connection = new WebSocket(socketUrl());
       socket = connection;
       connection.onopen = () => { attempts = 0; void sync(); };
       connection.onmessage = message => {

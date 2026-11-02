@@ -15,12 +15,12 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = ('username', 'password')
 
-        def validate(self, attrs):
-            try:
-                validate_password(attrs['password'], user=User(username=attrs['username']))
-            except DjangoValidationError as exc:
-                raise serializers.ValidationError({'password': exc.messages}) from exc
-            return attrs
+    def validate(self, attrs):
+        try:
+            validate_password(attrs['password'], user=User(username=attrs['username']))
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({'password': exc.messages}) from exc
+        return attrs
 
 
 

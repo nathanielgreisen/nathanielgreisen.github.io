@@ -4,3 +4,7 @@ channels[daphne]>=4.3,<4.4
 channels-redis>=4.3,<4.4
 redis>=6,<7
 python-dotenv>=1.1,<2
+dj-database-url>=3,<4
+psycopg[binary]>=3.2,<4
+django-cors-headers>=4.7,<5
+whitenoise>=6.9,<7

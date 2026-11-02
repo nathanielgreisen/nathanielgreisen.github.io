@@ -16,3 +16,18 @@ node_modules
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Local settings, Python environments, databases, and deployment output
+.env
+.env.*
+!.env.example
+!.env.production.example
+.venv/
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.sqlite3-*
+dist/
+staticfiles/
+_site/
+work/

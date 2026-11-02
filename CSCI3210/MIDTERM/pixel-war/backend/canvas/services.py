@@ -1,4 +1,6 @@
 import logging
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 import math
 from contextlib import contextmanager
 from datetime import timedelta
@@ -76,8 +78,14 @@ def snapshot(canvas_id):
 
 
 def publish(event):
-    # Chapter 7 replaces this function with a Channels broadcast.
-    return False
+    try:
+        async_to_sync(get_channel_layer().group_send)(
+            'canvas.1', {'type': 'pixel.changed', 'payload': event},
+        )
+        return True
+    except Exception:
+        log.exception('Placement saved; broadcast failed. Clients will resync.')
+        return False
 
 
 def place_pixel(canvas_id, user, x, y, color):

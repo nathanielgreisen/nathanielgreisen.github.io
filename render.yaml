@@ -1,0 +1,43 @@
+# Free demo resources. Review all plans in Render before creating the Blueprint.
+# Free Postgres expires after 30 days; export/upgrade before that date.
+services:
+  - type: web
+    name: pixel-war-api
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: CSCI3210/MIDTERM/pixel-war/backend
+    buildCommand: bash build.sh
+    startCommand: bash start.sh
+    healthCheckPath: /health/
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.3
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "0"
+      - key: FRONTEND_ORIGINS
+        value: https://nathanielgreisen.github.io
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pixel-war-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: pixel-war-cache
+          property: connectionString
+  - type: keyvalue
+    name: pixel-war-cache
+    plan: free
+    region: oregon
+    maxmemoryPolicy: noeviction
+    ipAllowList: []
+databases:
+  - name: pixel-war-db
+    plan: free
+    region: oregon
+    databaseName: pixel_war
+    user: pixel_war
+    ipAllowList: []

@@ -1,0 +1,66 @@
+name: Deploy portfolio and Pixel War to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: CSCI3210/MIDTERM/pixel-war/frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Build the MIDTERM frontend
+        working-directory: CSCI3210/MIDTERM/pixel-war/frontend
+        env:
+          # This is a public URL, not a secret or API key.
+          VITE_BACKEND_URL: ${{ vars.VITE_BACKEND_URL }}
+        run: |
+          if [ -z "$VITE_BACKEND_URL" ]; then
+            echo "::warning::Set the repository variable VITE_BACKEND_URL after Render deploys. The portfolio will deploy with a not-yet-connected MIDTERM page."
+          fi
+          npm ci
+          npm run lint
+          npm run build
+      - name: Assemble public files
+        run: |
+          python -m unittest discover -s scripts -p 'test_*.py'
+          python scripts/build_pages.py
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

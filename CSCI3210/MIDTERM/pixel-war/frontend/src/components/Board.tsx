@@ -40,7 +40,7 @@ export default function Board() {
       if (error instanceof ApiError && error.status === 401) clear();
     });
     return () => { active = false; };
-  }, [session, clear]);
+  }, [session, clear, ready]);
 
   async function place(px: number, py: number) {
     if (disabled || !session || !info || inFlight.current) return;
@@ -80,6 +80,7 @@ export default function Board() {
   return <section aria-label="Pixel board">
     <h2>{info?.title ?? 'Pixel War'}</h2>
     <p role="status">Connection: {status}</p>
+    {!ready && <p>The free server may need about a minute to wake up after inactivity.</p>}
     <button onClick={resync}>Reload canvas</button>
     <p>{!session ? 'Sign in to place pixels. Viewing is public.' :
       remaining > 0 ? `Next placement in ${remaining}s.` : 'Ready to place a pixel.'}</p>

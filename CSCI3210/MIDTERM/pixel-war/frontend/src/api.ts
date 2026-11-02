@@ -2,6 +2,7 @@ import {
   readCanvas, readHistory, readIdentity, readPlacement, readSession, readSnapshot,
 } from './types';
 import type { Pixel } from './types';
+import { apiUrl } from './deployment';
 
 export class ApiError extends Error {
   status: number;
@@ -30,12 +31,13 @@ async function request(path: string, token: string | null = null,
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   let response: Response;
   try {
-    response = await fetch(`/api/${path}`, {
+    response = await fetch(apiUrl(path), {
       method, headers, body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(10000),
+      credentials: 'omit',
+      signal: AbortSignal.timeout(90000),
     });
   } catch {
-    throw new Error('Network unavailable or request timed out. Check the servers.');
+    throw new Error('The server could not be reached. It may be waking up; please retry shortly.');
   }
   if (response.status === 204) return null;
   let data: unknown;
