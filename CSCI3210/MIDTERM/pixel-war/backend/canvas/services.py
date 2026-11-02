@@ -9,6 +9,8 @@ from redis import Redis
 from redis.exceptions import RedisError
 from rest_framework.exceptions import APIException, Throttled
 from .models import Canvas, Pixel, PixelPlacement, Profile
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 
 log = logging.getLogger(__name__)
 redis_client = Redis.from_url(
@@ -76,8 +78,15 @@ def snapshot(canvas_id):
 
 
 def publish(event):
-    # Chapter 7 replaces this function with a Channels broadcast.
-    return False
+    try:
+        async_to_sync(get_channel_layer().group_send)(
+            'canvas.1', {'type': 'pixel.changed', 'payload': event},
+        )
+        return True
+    except Exception:
+        # The SQL transaction already committed. Clients will resync.
+        log.exception('Placement saved; broadcast failed.')
+        return False
 
 
 def place_pixel(canvas_id, user, x, y, color):
