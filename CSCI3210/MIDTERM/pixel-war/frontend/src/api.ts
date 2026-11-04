@@ -1,5 +1,5 @@
 import {
-  readCanvas, readHistory, readIdentity, readPlacement, readSession, readSnapshot,
+  readCanvas, readHistory, readPlacement, readSession, readSnapshot,
 } from './types';
 import type { Pixel } from './types';
 import { apiUrl } from './deployment';
@@ -58,7 +58,6 @@ export const api = {
     readSession(await request('auth/register/', null, 'POST', { username, password })),
   login: async (username: string, password: string) =>
     readSession(await request('auth/login/', null, 'POST', { username, password })),
-  me: async (token: string) => readIdentity(await request('auth/me/', token)),
   logout: async (token: string) => { await request('auth/logout/', token, 'POST'); },
   canvas: async (token: string | null = null) =>
     readCanvas(await request('canvases/1/', token)),

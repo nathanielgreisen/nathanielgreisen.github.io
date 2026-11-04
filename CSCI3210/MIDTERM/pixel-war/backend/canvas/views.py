@@ -19,7 +19,9 @@ User = get_user_model()
 
 def identity(user):
     profile, _ = Profile.objects.get_or_create(user=user)
-    remaining = max(0, (profile.next_place_at - timezone.now()).total_seconds())         if profile.next_place_at else 0
+    remaining = 0
+    if profile.next_place_at:
+        remaining = max(0, (profile.next_place_at - timezone.now()).total_seconds())
     return {'username': user.username, 'retry_after': remaining}
 
 

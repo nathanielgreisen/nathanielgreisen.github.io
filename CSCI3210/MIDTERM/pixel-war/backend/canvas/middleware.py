@@ -11,20 +11,24 @@ class PixelCooldownMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
-        if request.method == 'POST' and request.path == '/api/canvases/1/pixels/':
-            try:
-                result = TokenAuthentication().authenticate(request)
-            except AuthenticationFailed:
-                result = None
-            if result is not None:
-                user, _ = result
-                try:
-                    milliseconds = redis_client.pttl(cooldown_key(user.pk))
-                except RedisError:
-                    return JsonResponse({'detail': 'Redis is unavailable. Try again shortly.'}, status=503)
-                if milliseconds > 0:
-                    wait = math.ceil(milliseconds / 1000)
-                    response = JsonResponse({'detail': 'Placement cooldown is active.'}, status=429)
-                    response['Retry-After'] = str(wait)
-                    return response
-        return self.get_response(request)
+        if request.method != 'POST' or request.path != '/api/canvases/1/pixels/':
+            return self.get_response(request)
+
+        try:
+            credentials = TokenAuthentication().authenticate(request)
+        except AuthenticationFailed:
+            credentials = None
+        if credentials is None:
+            return self.get_response(request)
+
+        user, _ = credentials
+        try:
+            milliseconds = redis_client.pttl(cooldown_key(user.pk))
+        except RedisError:
+            return JsonResponse({'detail': 'Redis is unavailable. Try again shortly.'}, status=503)
+        if milliseconds <= 0:
+            return self.get_response(request)
+
+        response = JsonResponse({'detail': 'Placement cooldown is active.'}, status=429)
+        response['Retry-After'] = str(math.ceil(milliseconds / 1000))
+        return response

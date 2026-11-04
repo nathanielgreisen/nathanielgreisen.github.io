@@ -13,7 +13,6 @@ export interface CanvasInfo {
   cooldown_seconds: number; can_rename: boolean;
 }
 export interface Session { token: string; username: string; retry_after: number }
-export interface Identity { username: string; retry_after: number }
 export interface PlacementResult {
   event: PixelEvent; retry_after: number; realtime: boolean;
 }
@@ -21,36 +20,36 @@ export interface HistoryEntry extends Pixel {
   id: number; username: string; version: number; created_at: string;
 }
 
-export function object(value: unknown): Record<string, unknown> {
+function object(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new Error('Expected a JSON object.');
   }
   return value as Record<string, unknown>;
 }
-export function text(value: unknown): string {
+function text(value: unknown): string {
   if (typeof value !== 'string') throw new Error('Expected text.');
   return value;
 }
-export function number(value: unknown): number {
+function number(value: unknown): number {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
     throw new Error('Expected a non-negative number.');
   }
   return value;
 }
-export function integer(value: unknown): number {
+function integer(value: unknown): number {
   const n = number(value);
   if (!Number.isSafeInteger(n)) throw new Error('Expected an integer.');
   return n;
 }
-export function boolean(value: unknown): boolean {
+function boolean(value: unknown): boolean {
   if (typeof value !== 'boolean') throw new Error('Expected true or false.');
   return value;
 }
-export function array<T>(value: unknown, read: (item: unknown) => T): T[] {
+function array<T>(value: unknown, read: (item: unknown) => T): T[] {
   if (!Array.isArray(value)) throw new Error('Expected a JSON array.');
   return value.map((item: unknown) => read(item));
 }
-export function readPixel(value: unknown): Pixel {
+function readPixel(value: unknown): Pixel {
   const v = object(value);
   const color = PALETTE.find(candidate => candidate === v.color);
   if (!color) throw new Error('Unrecognized palette color.');
@@ -78,12 +77,13 @@ export function readCanvas(value: unknown): CanvasInfo {
     height: integer(v.height), cooldown_seconds: integer(v.cooldown_seconds),
     can_rename: boolean(v.can_rename) };
 }
-export function readIdentity(value: unknown): Identity {
-  const v = object(value);
-  return { username: text(v.username), retry_after: number(v.retry_after) };
-}
 export function readSession(value: unknown): Session {
-  return { ...readIdentity(value), token: text(object(value).token) };
+  const session = object(value);
+  return {
+    username: text(session.username),
+    retry_after: number(session.retry_after),
+    token: text(session.token),
+  };
 }
 export function readPlacement(value: unknown): PlacementResult {
   const v = object(value);
