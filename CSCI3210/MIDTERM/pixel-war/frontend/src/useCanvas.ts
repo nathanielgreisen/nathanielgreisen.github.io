@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, errorMessage } from './api';
 import { readEvent } from './types';
-import type { PixelEvent, Snapshot } from './types';
+import type { Pixel, PixelEvent, Snapshot } from './types';
 import { socketUrl } from './deployment';
 
 export function useCanvas() {
@@ -10,10 +10,12 @@ export function useCanvas() {
   const syncRef = useRef<() => void>(() => {});
   const [status, setStatus] = useState('Connecting…');
   const [ready, setReady] = useState(false);
+  const [emptyPixels, setEmptyPixels] = useState<number | null>(null);
 
   useEffect(() => {
     let disposed = false;
     let current: Snapshot | null = null;
+    const coloredPixels = new Set<number>();
     let pending: PixelEvent[] = [];
     let syncing = false;
     let syncAgain = false;
@@ -21,6 +23,14 @@ export function useCanvas() {
     let attempts = 0;
     let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
     let gapTimer: ReturnType<typeof setTimeout> | undefined;
+
+    function paintPixel(context: CanvasRenderingContext2D, pixel: Pixel, width: number) {
+      const index = pixel.y * width + pixel.x;
+      if (pixel.color === '#FFFFFF') coloredPixels.delete(index);
+      else coloredPixels.add(index);
+      context.fillStyle = pixel.color;
+      context.fillRect(pixel.x, pixel.y, 1, 1);
+    }
 
     function drawSnapshot(value: Snapshot) {
       const canvas = canvasRef.current;
@@ -30,10 +40,9 @@ export function useCanvas() {
       if (!context) throw new Error('Canvas drawing is unsupported.');
       context.fillStyle = '#FFFFFF';
       context.fillRect(0, 0, value.width, value.height);
-      value.pixels.forEach(pixel => {
-        context.fillStyle = pixel.color;
-        context.fillRect(pixel.x, pixel.y, 1, 1);
-      });
+      coloredPixels.clear();
+      value.pixels.forEach(pixel => paintPixel(context, pixel, value.width));
+      setEmptyPixels(value.width * value.height - coloredPixels.size);
     }
 
     function drawEvent(event: PixelEvent) {
@@ -42,8 +51,8 @@ export function useCanvas() {
       }
       const context = canvasRef.current?.getContext('2d');
       if (!context) throw new Error('Canvas drawing is unsupported.');
-      context.fillStyle = event.color;
-      context.fillRect(event.x, event.y, 1, 1);
+      paintPixel(context, event, current.width);
+      setEmptyPixels(current.width * current.height - coloredPixels.size);
       current.version = event.version;
     }
 
@@ -130,5 +139,5 @@ export function useCanvas() {
 
   const accept = useCallback((event: PixelEvent) => acceptRef.current(event), []);
   const resync = useCallback(() => syncRef.current(), []);
-  return { canvasRef, status, ready, accept, resync };
+  return { canvasRef, status, ready, emptyPixels, accept, resync };
 }

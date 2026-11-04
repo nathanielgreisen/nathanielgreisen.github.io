@@ -12,7 +12,7 @@ import Palette from './Palette';
 
 export default function Board() {
   const { session, clear } = useAuth();
-  const { canvasRef, status, ready, accept, resync } = useCanvas();
+  const { canvasRef, status, ready, emptyPixels, accept, resync } = useCanvas();
   const [info, setInfo] = useState<CanvasInfo | null>(null);
   const [color, setColor] = useState<Color>('#FF4500');
   const [message, setMessage] = useState('');
@@ -67,6 +67,24 @@ export default function Board() {
     } finally { inFlight.current = false; setBusy(false); }
   }
 
+  function exportPng() {
+    if (!ready || !canvasRef.current) return;
+    canvasRef.current.toBlob(blob => {
+      if (!blob) {
+        setMessage('Could not export the canvas as a PNG.');
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'pixel-war.png';
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }, 'image/png');
+  }
+
   async function rename(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!session) return;
@@ -82,7 +100,10 @@ export default function Board() {
     <h2>{info?.title ?? 'Pixel War'}</h2>
     <p role="status">Connection: {status}</p>
     {!ready && <p>The free server may need about a minute to wake up after inactivity.</p>}
-    <button onClick={resync}>Reload canvas</button>
+    <div className="controls">
+      <button onClick={resync}>Reload canvas</button>
+      <button onClick={exportPng} disabled={!ready}>Download PNG</button>
+    </div>
     <p>{!session ? 'Sign in to place pixels. Viewing is public.' :
       remaining > 0 ? `Next placement in ${remaining}s.` : 'Ready to place a pixel.'}</p>
     <p role="status" aria-live="polite">{message}</p>
@@ -91,7 +112,10 @@ export default function Board() {
       <CanvasView canvasRef={canvasRef} width={info?.width ?? 100}
         height={info?.height ?? 100} disabled={disabled}
         onPlace={(px, py) => void place(px, py)} />
-      <Leaderboard />
+      <div>
+        <Leaderboard />
+        <p>Empty pixels: <strong>{emptyPixels?.toLocaleString() ?? '—'}</strong></p>
+      </div>
     </div>
     <form onSubmit={event => { event.preventDefault(); void place(x, y); }}>
       <p>Keyboard alternative: enter a coordinate and place the selected color.</p>
