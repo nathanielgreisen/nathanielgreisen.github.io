@@ -1,5 +1,5 @@
 import {
-  readCanvas, readHistory, readPlacement, readSession, readSnapshot,
+  readCanvas, readHistory, readLeaderboard, readPlacement, readSession, readSnapshot,
 } from './types';
 import type { Pixel } from './types';
 import { apiUrl } from './deployment';
@@ -64,6 +64,7 @@ export const api = {
   snapshot: async () => readSnapshot(await request('canvases/1/snapshot/')),
   place: async (token: string, pixel: Pixel) =>
     readPlacement(await request('canvases/1/pixels/', token, 'POST', pixel)),
+  leaderboard: async () => readLeaderboard(await request('canvases/1/leaderboard/')),
   history: async () => readHistory(await request('canvases/1/history/')),
   rename: async (token: string, title: string) =>
     readCanvas(await request('canvases/1/rename/', token, 'PATCH', { title })),

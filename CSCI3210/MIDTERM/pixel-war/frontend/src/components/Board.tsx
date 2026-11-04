@@ -7,6 +7,7 @@ import type { Color } from '../palette';
 import type { CanvasInfo } from '../types';
 import CanvasView from './CanvasView';
 import History from './History';
+import Leaderboard from './Leaderboard';
 import Palette from './Palette';
 
 export default function Board() {
@@ -86,9 +87,12 @@ export default function Board() {
       remaining > 0 ? `Next placement in ${remaining}s.` : 'Ready to place a pixel.'}</p>
     <p role="status" aria-live="polite">{message}</p>
     <Palette color={color} onChange={setColor} />
-    <CanvasView canvasRef={canvasRef} width={info?.width ?? 100}
-      height={info?.height ?? 100} disabled={disabled}
-      onPlace={(px, py) => void place(px, py)} />
+    <div className="board-layout">
+      <CanvasView canvasRef={canvasRef} width={info?.width ?? 100}
+        height={info?.height ?? 100} disabled={disabled}
+        onPlace={(px, py) => void place(px, py)} />
+      <Leaderboard />
+    </div>
     <form onSubmit={event => { event.preventDefault(); void place(x, y); }}>
       <p>Keyboard alternative: enter a coordinate and place the selected color.</p>
       <label>X <input type="number" required min={0} max={(info?.width ?? 100) - 1}

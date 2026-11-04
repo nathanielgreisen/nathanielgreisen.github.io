@@ -10,12 +10,38 @@ from django.test import TestCase, SimpleTestCase, override_settings
 from rest_framework.authtoken.models import Token
 from config.asgi import application
 from . import services
-from .models import Canvas
+from .models import Canvas, PixelPlacement
 
 PAGES_ORIGIN = 'https://nathanielgreisen.github.io'
 
 
 class DeploymentApiTests(TestCase):
+    def test_leaderboard_counts_all_placements_and_limits_results(self):
+        board = Canvas.objects.create(pk=1)
+        other_board = Canvas.objects.create(pk=2)
+        user_model = get_user_model()
+        users = [user_model.objects.create(username=f'player{i:02}') for i in range(11)]
+        placements = [
+            PixelPlacement(canvas=board, user=users[0], x=0, y=0,
+                           color='#FF4500', version=version)
+            for version in range(1, 61)
+        ]
+        placements.extend(
+            PixelPlacement(canvas=board, user=user, x=0, y=0,
+                           color='#FF4500', version=version)
+            for version, user in enumerate(users[1:], start=61)
+        )
+        placements.append(PixelPlacement(canvas=other_board, user=users[-1],
+                                         x=0, y=0, color='#FF4500', version=1))
+        PixelPlacement.objects.bulk_create(placements)
+
+        response = self.client.get('/api/canvases/1/leaderboard/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [
+            {'username': 'player00', 'placements': 60},
+            *[{'username': user.username, 'placements': 1} for user in users[1:10]],
+        ])
+
     def test_health_is_public(self):
         response = self.client.get('/health/')
         self.assertEqual(response.status_code, 200)

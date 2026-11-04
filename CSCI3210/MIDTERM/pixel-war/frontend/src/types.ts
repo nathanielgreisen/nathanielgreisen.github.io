@@ -97,3 +97,15 @@ export function readHistory(value: unknown): HistoryEntry[] {
       version: integer(v.version), created_at: text(v.created_at) };
   });
 }
+
+export interface LeaderboardEntry {
+  username: string;
+  placements: number;
+}
+
+export function readLeaderboard(value: unknown): LeaderboardEntry[] {
+  return array(value, item => {
+    const row = object(item);
+    return { username: text(row.username), placements: integer(row.placements) };
+  });
+}

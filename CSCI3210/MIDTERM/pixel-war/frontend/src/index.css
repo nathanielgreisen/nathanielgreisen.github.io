@@ -107,6 +107,7 @@ td {
 }
 
 .canvas-transform {
+  position: relative;
   width: 600px;
   height: 600px;
   transform-origin: top left;
@@ -117,4 +118,31 @@ td {
   flex-wrap: wrap;
   gap: 0.5rem;
   margin-block: 0.5rem;
+}
+
+.board-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 15rem);
+  gap: 1rem;
+  align-items: start;
+}
+
+.leaderboard {
+  overflow-wrap: anywhere;
+}
+
+.leaderboard td:last-child {
+  text-align: right;
+}
+
+@media (max-width: 900px) {
+  .board-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.pixel-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }

@@ -1,5 +1,6 @@
 from django.contrib.auth import authenticate, get_user_model
 from django.db import IntegrityError, transaction
+from django.db.models import Count, F
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.authtoken.models import Token
@@ -86,6 +87,17 @@ class CanvasViewSet(viewsets.ReadOnlyModelViewSet):
         canvas = self.get_object()
         events = PixelPlacement.objects.filter(canvas=canvas).select_related('user')[:50]
         return Response(PlacementSerializer(events, many=True).data)
+
+    @action(detail=True, methods=['get'])
+    def leaderboard(self, request, pk=None):
+        canvas = self.get_object()
+        leaders = (
+            PixelPlacement.objects.filter(canvas=canvas)
+            .values(username=F('user__username'))
+            .annotate(placements=Count('pk'))
+            .order_by('-placements', 'username')[:10]
+        )
+        return Response(list(leaders))
 
     @action(detail=True, methods=['patch'], permission_classes=[IsAuthenticated])
     def rename(self, request, pk=None):

@@ -46,6 +46,9 @@ export default function CanvasView({ canvasRef, width, height, disabled, onPlace
   }
   function shift(x: number, y: number) { setPan(value => ({ x: value.x + x, y: value.y + y })); }
 
+  // Keep the lines thin even when the canvas is zoomed in.
+  const gridLine = `rgba(0, 0, 0, 0.14) ${0.75 / zoom}px, transparent 0`;
+
   return <div>
     <p>Click to place. Drag to pan. Use the wheel or buttons to zoom.</p>
     <div className="controls" aria-label="Canvas navigation">
@@ -65,6 +68,10 @@ export default function CanvasView({ canvasRef, width, height, disabled, onPlace
         style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }}>
         <canvas ref={canvasRef} width={width} height={height} className="pixel-canvas"
           aria-label="Shared pixel canvas. Use coordinate inputs below for keyboard placement." />
+        <div className="pixel-grid" aria-hidden="true" style={{
+          backgroundImage: `linear-gradient(to right, ${gridLine}), linear-gradient(to bottom, ${gridLine})`,
+          backgroundSize: `${100 / width}% ${100 / height}%`,
+        }} />
       </div>
     </div>
   </div>;
