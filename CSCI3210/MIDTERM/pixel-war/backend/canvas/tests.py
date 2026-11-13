@@ -1,4 +1,6 @@
 import os
+from contextlib import nullcontext
+from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -6,16 +8,42 @@ from channels.testing import WebsocketCommunicator
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.utils import timezone
 from django.test import TestCase, SimpleTestCase, override_settings
 from rest_framework.authtoken.models import Token
 from config.asgi import application
 from . import services
-from .models import Canvas, PixelPlacement
+from .models import Canvas, PixelPlacement, Profile
 
 PAGES_ORIGIN = 'https://nathanielgreisen.github.io'
 
 
 class DeploymentApiTests(TestCase):
+    def test_superuser_can_place_twice_with_an_existing_cooldown(self):
+        Canvas.objects.create(pk=1)
+        admin = get_user_model().objects.create_superuser(username='admin')
+        token = Token.objects.create(user=admin)
+        Profile.objects.create(user=admin, next_place_at=timezone.now() + timedelta(minutes=1))
+        headers = {'HTTP_AUTHORIZATION': f'Token {token.key}'}
+
+        identity = self.client.get('/api/auth/me/', **headers)
+        self.assertEqual(identity.json()['retry_after'], 0)
+        with (
+            patch.object(services, 'board_lock', return_value=nullcontext()),
+            patch.object(services, 'redis_client') as cache,
+            patch.object(services, 'publish', return_value=True),
+        ):
+            cache.pttl.return_value = 60000
+            for x in range(2):
+                response = self.client.post('/api/canvases/1/pixels/',
+                    {'x': x, 'y': 0, 'color': '#FF4500'},
+                    content_type='application/json', **headers)
+                self.assertEqual(response.status_code, 201)
+                self.assertEqual(response.json()['retry_after'], 0)
+            cache.pttl.assert_not_called()
+            cache.psetex.assert_not_called()
+        self.assertEqual(PixelPlacement.objects.filter(user=admin).count(), 2)
+
     def test_leaderboard_counts_all_placements_and_limits_results(self):
         board = Canvas.objects.create(pk=1)
         other_board = Canvas.objects.create(pk=2)

@@ -94,7 +94,7 @@ def place_pixel(canvas_id, user, x, y, color):
             canvas = Canvas.objects.get(pk=canvas_id)
             profile, _ = Profile.objects.get_or_create(user=user)
             now = timezone.now()
-            if profile.next_place_at and profile.next_place_at > now:
+            if not user.is_superuser and profile.next_place_at and profile.next_place_at > now:
                 raise Throttled(wait=(profile.next_place_at - now).total_seconds())
             Pixel.objects.update_or_create(
                 canvas=canvas, x=x, y=y, defaults={'color': color},
@@ -104,8 +104,9 @@ def place_pixel(canvas_id, user, x, y, color):
             PixelPlacement.objects.create(
                 canvas=canvas, user=user, x=x, y=y, color=color, version=canvas.version,
             )
-            profile.next_place_at = now + timedelta(seconds=canvas.cooldown_seconds)
-            profile.save(update_fields=['next_place_at'])
+            if not user.is_superuser:
+                profile.next_place_at = now + timedelta(seconds=canvas.cooldown_seconds)
+                profile.save(update_fields=['next_place_at'])
             event = {'type': 'pixel', 'x': x, 'y': y, 'color': color,
                      'version': canvas.version, 'username': user.username}
         # SQL has committed. Never report this saved placement as failed merely
@@ -119,11 +120,13 @@ def place_pixel(canvas_id, user, x, y, color):
             else:
                 # A partial/missing/stale cache must be rebuilt from SQL.
                 redis_client.delete(cache_key(canvas_id))
-            milliseconds = max(1, math.ceil(
-                (profile.next_place_at - timezone.now()).total_seconds() * 1000,
-            ))
-            redis_client.psetex(cooldown_key(user.pk), milliseconds, '1')
+            if not user.is_superuser:
+                milliseconds = max(1, math.ceil(
+                    (profile.next_place_at - timezone.now()).total_seconds() * 1000,
+                ))
+                redis_client.psetex(cooldown_key(user.pk), milliseconds, '1')
         except RedisError:
             log.exception('Placement saved; cache update failed. Snapshot will reconcile.')
         realtime = publish(event)
-        return {'event': event, 'retry_after': canvas.cooldown_seconds, 'realtime': realtime}
+        retry_after = 0 if user.is_superuser else canvas.cooldown_seconds
+        return {'event': event, 'retry_after': retry_after, 'realtime': realtime}

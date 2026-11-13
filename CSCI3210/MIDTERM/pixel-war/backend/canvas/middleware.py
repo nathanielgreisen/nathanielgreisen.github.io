@@ -22,6 +22,8 @@ class PixelCooldownMiddleware:
             return self.get_response(request)
 
         user, _ = credentials
+        if user.is_superuser:
+            return self.get_response(request)
         try:
             milliseconds = redis_client.pttl(cooldown_key(user.pk))
         except RedisError:

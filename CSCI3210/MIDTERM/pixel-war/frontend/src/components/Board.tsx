@@ -53,7 +53,7 @@ export default function Board() {
     try {
       const result = await api.place(session.token, { x: px, y: py, color });
       accept(result.event);
-      setDeadline(Date.now() + result.retry_after * 1000);
+      setDeadline(result.retry_after > 0 ? Date.now() + result.retry_after * 1000 : 0);
       setClock(Date.now());
       setMessage(result.realtime ? 'Pixel saved.' : 'Pixel saved; live delivery is recovering.');
     } catch (error: unknown) {
