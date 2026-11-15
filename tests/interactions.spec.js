@@ -63,59 +63,59 @@ test("letter movement bends the grid until the letters settle", async ({ page })
   expect((await readGrid()) === initial).toBe(true);
 });
 
-test("letters wind up and return home on independent timers", async ({ page }) => {
+test("all letters wait for shared stillness and coast when regrouping is interrupted", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("index.html");
   const letters = page.locator(".name-letter");
-  const far = letters.nth(8);
-  const near = letters.last();
-  const farHome = await far.boundingBox();
-  const nearHome = await near.boundingBox();
-  const grab = async letter => {
+  const first = letters.nth(8);
+  const second = letters.last();
+  const firstHome = await first.boundingBox();
+  const secondHome = await second.boundingBox();
+
+  async function grab(letter) {
     const { x, y, width, height } = await letter.boundingBox();
-    await page.mouse.move(x + width / 2, y + height / 2);
+    const center = { x: x + width / 2, y: y + height / 2 };
+    await page.mouse.move(center.x, center.y);
     await page.mouse.down();
     await expect(letter).toHaveClass(/is-dragging/);
-    return { x: x + width / 2, y: y + height / 2 };
-  };
+    return center;
+  }
 
-  const start = await grab(far);
-  await page.mouse.move(start.x + 620, start.y);
-  await page.clock.runFor(750);
+  let pointer = await grab(first);
+  await page.mouse.move(pointer.x + 400, pointer.y);
+  await page.clock.runFor(600);
   await page.mouse.up();
-  const farRest = await far.boundingBox();
-  expect(farRest.x - farHome.x).toBeGreaterThan(600);
+  const firstRest = await first.boundingBox();
 
-  // The far letter should start returning while another letter is still held.
-  const next = await grab(near);
-  await page.mouse.move(next.x, next.y + 40);
+  pointer = await grab(second);
+  await page.mouse.move(pointer.x + 420, pointer.y + 100);
+  await page.clock.runFor(3300);
+  const secondRest = await second.boundingBox();
+  expect(await first.boundingBox()).toEqual(firstRest);
+  await page.mouse.up();
   await page.clock.runFor(2900);
-  const nearRest = await near.boundingBox();
-  expect(await far.boundingBox()).toEqual(farRest);
-  await page.clock.runFor(300);
-  expect((await far.boundingBox()).x).toBeGreaterThan(farRest.x + 3);
-  expect(await near.boundingBox()).toEqual(nearRest);
-  await page.mouse.up();
-  await page.clock.runFor(2950);
-  expect(await near.boundingBox()).toEqual(nearRest);
-  await page.clock.runFor(300);
-  const nearReturning = await near.boundingBox();
-  expect(nearRest.y - nearReturning.y).toBeGreaterThan(2);
-  expect(nearRest.y - nearReturning.y).toBeLessThan(38);
-  expect((await far.boundingBox()).x).toBeGreaterThan(farHome.x + 150);
+  expect(await first.boundingBox()).toEqual(firstRest);
+  expect(await second.boundingBox()).toEqual(secondRest);
 
-  // Grabbing a letter on its way back starts a fresh idle delay.
-  await grab(near);
-  await page.clock.runFor(100);
+  await page.clock.runFor(1100);
+  const movingFirst = await first.boundingBox();
+  const movingSecond = await second.boundingBox();
+  expect(movingFirst.x).toBeLessThan(firstRest.x - 10);
+  expect(movingSecond.x).toBeLessThan(secondRest.x - 10);
+
+  await grab(first);
+  await expect(second).toHaveAttribute("data-motion-reason", "coasting");
+  await page.clock.runFor(200);
+  expect((await second.boundingBox()).x).toBeLessThan(movingSecond.x - 5);
+  expect(await first.boundingBox()).toEqual(movingFirst);
+  await page.clock.runFor(3300);
+  await expect(second).toHaveAttribute("data-motion-reason", "idle");
   await page.mouse.up();
-  await page.clock.runFor(1600);
-  expect(await far.boundingBox()).toEqual(farHome);
-  await page.clock.runFor(1300);
-  expect(await near.boundingBox()).toEqual(nearReturning);
-  await page.clock.runFor(700);
-  expect(await near.boundingBox()).toEqual(nearHome);
+  await page.clock.runFor(7200);
+  expect(await first.boundingBox()).toEqual(firstHome);
+  expect(await second.boundingBox()).toEqual(secondHome);
 });
 
 test("two displaced letters find their way home around each other", async ({ page }) => {
@@ -158,7 +158,7 @@ test("two displaced letters find their way home around each other", async ({ pag
   const swappedSecond = await second.boundingBox();
   expect(swappedFirst.y - firstHome.y).toBeGreaterThan(85);
   expect(secondHome.y - swappedSecond.y).toBeGreaterThan(85);
-  await page.clock.runFor(5700);
+  await page.clock.runFor(7200);
   expect(await first.boundingBox()).toEqual(firstHome);
   expect(await second.boundingBox()).toEqual(secondHome);
   expect(await positions()).toEqual(originalPositions);
@@ -206,11 +206,7 @@ for (const width of [1200, 390]) {
       const disturbed = await positions();
       expect(disturbed.filter(([x, y], i) => Math.hypot(x - home[i][0], y - home[i][1]) > 1).length)
         .toBeGreaterThanOrEqual(3);
-      await page.clock.runFor(11_000);
-      if (width === 1200 && seed === 0.75) {
-        expect(await letters.and(page.locator('[data-motion-reason="regroup"]')).count()).toBeGreaterThan(0);
-      }
-      await page.clock.runFor(3500);
+      await page.clock.runFor(14_500);
       expect(await positions()).toEqual(home);
     });
   }

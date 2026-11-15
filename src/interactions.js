@@ -1,6 +1,6 @@
 import { makeLetterWake, sampleLetterWake, traceGlyphOutline } from "./letter-wake.js";
-import { impactAngle, planLetterReturn, sampleLetterReturn } from "./letter-motion.js";
-import { canSlideFormation, createLetterNavigator } from "./letter-navigation.js";
+import { impactAngle } from "./letter-motion.js";
+import { canSlideFormation } from "./letter-navigation.js";
 import { createLetterHistory, sampleLetterRecovery } from "./letter-recovery.js";
 
 export function mountInteractions(container) {
@@ -205,9 +205,8 @@ function setupGrid(canvas, reducedMotion, signal) {
 
 function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   const grid = heading.closest(".home-intro");
-  const navigate = createLetterNavigator(glyphsOverlap, hasUserMotion);
   const letters = Array.from(heading.querySelectorAll(".name-letter"), (element, index) => ({
-    element, index, x: 0, y: 0, vx: 0, vy: 0, returnAt: null, returnSpeed: 0, motionReason: "idle",
+    element, index, x: 0, y: 0, vx: 0, vy: 0, motionReason: "idle",
   }));
   const history = createLetterHistory(letters.length);
   const maskContext = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
@@ -218,12 +217,11 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   let letterFrame = 0;
   let returnTimer = 0;
   let lastFrameTime = null;
-  let lastInteraction = -Infinity;
+  let returnAt = null;
   let recovery = null;
   const maxLetterSpeed = 2400;
   const flickWindow = 60;
   const returnDelay = 3000;
-  const regroupDelay = 10_000;
   const regroupDuration = 4000;
 
   for (const letter of letters) {
@@ -231,9 +229,13 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
     element.addEventListener("pointerdown", event => {
       if (drag || !event.isPrimary || event.button !== 0) return;
       event.preventDefault();
-      lastInteraction = performance.now();
-      recovery = null;
-      navigate.reset();
+      returnAt = null;
+      if (recovery) {
+        recovery = null;
+        for (const moving of letters) {
+          if (moving !== letter) setLetterMotion(moving, moving.vx || moving.vy ? "coasting" : "idle");
+        }
+      }
       // Keep the decorative offset out of pointer and collision measurements.
       heading.classList.add("letters-in-motion");
       const bounds = element.getBoundingClientRect();
@@ -242,8 +244,8 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
         left: bounds.left, top: bounds.top, samples: [], movedAt: -Infinity };
       samplePointer(event);
       letter.vx = letter.vy = 0;
-      cancelReturn(letter);
       setLetterMotion(letter, "drag");
+      scheduleLetters();
       element.setPointerCapture(event.pointerId);
       element.classList.add("is-dragging");
     }, { signal });
@@ -276,7 +278,6 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
 
   function endDrag(releaseEvent) {
     if (!drag) return;
-    lastInteraction = performance.now();
     const { letter, samples } = drag;
     letter.vx = letter.vy = 0;
     if (releaseEvent) {
@@ -316,45 +317,60 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   }
 
   function capturePose(bodies) {
-    const pose = new Float32Array(letters.length * 2);
+    const pose = new Float64Array(letters.length * 2);
     for (const [i, body] of bodies.entries()) {
-      pose[i * 2] = body.letter.x + body.x - body.bounds.left;
-      pose[i * 2 + 1] = body.letter.y + body.y - body.bounds.top;
+      pose[i * 2] = body.letter.x + (body.x - body.bounds.left);
+      pose[i * 2 + 1] = body.letter.y + (body.y - body.bounds.top);
     }
     return pose;
   }
 
   function regroup(bodies, bounds, time) {
     if (!recovery) {
-      navigate.reset();
       updateGridLetters?.([]);
       const trip = history.buildRoute(capturePose(bodies), (from, to) =>
-        canSlideFormation(bodies, from, to, glyphsOverlap));
-      recovery = { started: time, trip };
+        canSlideFormation(bodies, from, to, glyphsOverlap, bounds));
+      if (!trip) {
+        // Layout changes can invalidate a recorded route. Hold until another interaction.
+        returnAt = null;
+        lastFrameTime = null;
+        heading.classList.remove("letters-in-motion");
+        return;
+      }
+      recovery = { started: time, lastFrame: time, recordedThrough: 0, trip };
     }
     const progress = Math.min(1, (time - recovery.started) / regroupDuration);
     const pose = sampleLetterRecovery(recovery.trip, progress);
+    const dt = (time - recovery.lastFrame) / 1000;
+    recovery.lastFrame = time;
+
     for (const [i, body] of bodies.entries()) {
       const { letter } = body;
-      cancelReturn(letter);
-      letter.vx = letter.vy = 0;
       if (progress === 1) {
-        letter.x = letter.y = 0;
+        letter.x = letter.y = letter.vx = letter.vy = 0;
         letter.element.style.removeProperty("transform");
         setLetterMotion(letter, "idle");
         continue;
       }
-      body.x = body.bounds.left + pose[i * 2] - letter.x;
-      body.y = body.bounds.top + pose[i * 2 + 1] - letter.y;
-      if (body.x === body.bounds.left && body.y === body.bounds.top) continue;
-      placeLetter(letter, body.x, body.y, bounds, body.bounds);
+      const dx = pose[i * 2] - letter.x;
+      const dy = pose[i * 2 + 1] - letter.y;
+      letter.vx = dt > 0 ? dx / dt : 0;
+      letter.vy = dt > 0 ? dy / dt : 0;
+      if (!dx && !dy) continue;
+      placeLetter(letter, body.x + dx, body.y + dy, bounds, body.bounds);
       setLetterMotion(letter, "regroup");
     }
+
     if (progress < 1) {
+      // Keep the crossed waypoints so a later grab can interrupt at this exact pose.
+      while (recovery.recordedThrough < recovery.trip.segment - 1) {
+        history.record(recovery.trip.route[++recovery.recordedThrough]);
+      }
       history.record(pose);
       scheduleLetters();
     } else {
       recovery = null;
+      returnAt = null;
       history.reset();
       lastFrameTime = null;
       heading.classList.remove("letters-in-motion");
@@ -391,8 +407,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       if (!masks.has(glyph)) masks.set(glyph, measureGlyph(maskContext, canvasFont, glyph, baseline));
       return { letter, bounds, mask: masks.get(glyph), x: bounds.left, y: bounds.top };
     });
-    const regroupAt = lastInteraction + regroupDelay;
-    if (!drag && (recovery || (time >= regroupAt && letters.some(letter => letter.x || letter.y)))) {
+    if (recovery || (!drag && returnAt !== null && time >= returnAt)) {
       regroup(bodies, gridBounds, time);
       return;
     }
@@ -409,32 +424,9 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       grabbed.letter.vy = dy / travelTime;
     }
 
-    for (const body of bodies) {
-      const { letter } = body;
-      if (body === grabbed || letter.returnAt === null || time < letter.returnAt) continue;
-      const distance = Math.hypot(letter.x, letter.y);
-      if (!letter.returnGlide) {
-        if (!distance) continue;
-        letter.returnGlide = planLetterReturn(letter.x, letter.y);
-        letter.returnSpeed = distance / letter.returnGlide.duration;
-      }
-      setLetterMotion(letter, "return");
-      const glide = letter.returnGlide;
-      glide.elapsed += dt;
-      const target = glide.detoured ? { x: 0, y: 0 } : sampleLetterReturn(glide, glide.elapsed);
-      const dx = target.x - letter.x;
-      const dy = target.y - letter.y;
-      const maxSpeed = letter.returnSpeed * (glide.detoured ? 1 : 2.25);
-      const travelTime = Math.max(dt, Math.hypot(dx, dy) / maxSpeed);
-      letter.vx = dx / travelTime;
-      letter.vy = dy / travelTime;
-    }
-
-    navigate.steer(bodies, gridBounds, dt, time);
     stepLetterPhysics(bodies, gridBounds, dt, Math.random, () => history.record(capturePose(bodies)));
 
     const wakes = [];
-    let nextReturn = Infinity;
     for (const body of bodies) {
       const { letter } = body;
       if (body.x !== body.bounds.left || body.y !== body.bounds.top) {
@@ -445,42 +437,28 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
         }
       }
       if (body === grabbed) continue;
-      if (letter.returnGlide) {
-        if ((letter.returnGlide.detoured || letter.returnGlide.elapsed >= letter.returnGlide.duration) &&
-            Math.hypot(letter.x, letter.y) < 0.01) {
-          letter.x = letter.y = letter.vx = letter.vy = 0;
-          letter.element.style.removeProperty("transform");
-          cancelReturn(letter);
-          setLetterMotion(letter, "idle");
-        }
-        continue;
-      }
-
       const speed = Math.hypot(letter.vx, letter.vy);
       if (speed) {
-        cancelReturn(letter);
         const remaining = Math.max(0, speed - (245 + speed * 0.15) * dt) / speed;
         letter.vx *= remaining;
         letter.vy *= remaining;
       }
-      if (!letter.vx && !letter.vy) {
-        setLetterMotion(letter, "idle");
-        if (letter.x || letter.y) {
-          letter.returnAt ??= time + returnDelay;
-          nextReturn = Math.min(nextReturn, letter.returnAt);
-        }
-      }
+      if (!letter.vx && !letter.vy) setLetterMotion(letter, "idle");
     }
-    if (drag || letters.some(letter => letter.vx || letter.vy || letter.returnGlide)) {
+
+    if (drag || letters.some(letter => letter.vx || letter.vy)) {
+      returnAt = null;
       updateGridLetters?.(wakes);
       scheduleLetters();
     } else {
       updateGridLetters?.([]);
       lastFrameTime = null;
       heading.classList.remove("letters-in-motion");
-      if (nextReturn < Infinity) {
-        returnTimer = setTimeout(scheduleLetters, Math.max(0, Math.min(nextReturn, regroupAt) - performance.now()));
+      if (letters.some(letter => letter.x || letter.y)) {
+        returnAt ??= time + returnDelay;
+        returnTimer = setTimeout(scheduleLetters, Math.max(0, returnAt - performance.now()));
       } else {
+        returnAt = null;
         history.reset();
       }
     }
@@ -495,6 +473,15 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   }
 
   const observer = new ResizeObserver(() => {
+    if (recovery) {
+      recovery = null;
+      returnAt = null;
+      for (const letter of letters) {
+        letter.vx = letter.vy = 0;
+        setLetterMotion(letter, "idle");
+      }
+      scheduleLetters();
+    }
     const moving = heading.classList.contains("letters-in-motion");
     heading.classList.add("letters-in-motion");
     const gridBounds = grid.getBoundingClientRect();
@@ -559,23 +546,11 @@ function glyphsOverlap(a, b) {
   return false;
 }
 
-function cancelReturn(letter) {
-  letter.returnAt = null;
-  letter.returnSpeed = 0;
-  letter.returnGlide = null;
-  letter.navigationVX = letter.navigationVY = 0;
-}
-
 function setLetterMotion(letter, reason) {
   if (letter.motionReason === reason) return;
   letter.motionReason = reason;
   letter.element.dataset.motionReason = reason;
   console.debug(`[letters] ${letter.element.textContent} #${letter.index + 1}: ${reason}`);
-}
-
-function hasUserMotion(letter) {
-  return letter.motionReason === "drag" || Boolean((letter.vx || letter.vy) &&
-    (letter.motionReason === "flick" || letter.motionReason === "user-impact"));
 }
 
 export function stepLetterPhysics(bodies, bounds, dt, random = Math.random, recordPose) {
@@ -585,10 +560,12 @@ export function stepLetterPhysics(bodies, bounds, dt, random = Math.random, reco
   const step = dt / steps;
   for (let i = 0; i < steps; i++) {
     for (const body of bodies) {
+      const { x, y } = body;
       moveLetterAxis(body, bodies, step, "x", "vx", bounds, random);
+      if (body.x !== x) recordPose?.();
       moveLetterAxis(body, bodies, step, "y", "vy", bounds, random);
+      if (body.y !== y) recordPose?.();
     }
-    if (fastest) recordPose?.();
   }
 }
 
@@ -612,29 +589,8 @@ function moveLetterAxis(body, bodies, dt, axis, velocity, bounds, random) {
     const hit = other.letter;
     const relativeSpeed = speed - hit[velocity];
     if (relativeSpeed * speed > 0) {
-      const userImpact = hasUserMotion(letter) || hasUserMotion(hit);
-      if (userImpact) {
-        for (const affected of [letter, hit]) {
-          cancelReturn(affected);
-          if (affected.motionReason !== "drag" && affected.motionReason !== "flick") {
-            setLetterMotion(affected, "user-impact");
-          }
-        }
-      } else if (letter.returnSpeed && hit.returnSpeed) {
-        // Physical contact remains solid while the navigator negotiates a route.
-        return;
-      } else if (letter.returnSpeed) {
-        if (hit.motionReason === "idle") {
-          const across = axis === "x" ? "vy" : "vx";
-          hit[across] += Math.sin(impactAngle(body, other, axis, speed, random)) * speed;
-        }
-        setLetterMotion(hit, "return-push");
-        hit[velocity] = speed;
-        return;
-      } else if (hit.returnSpeed) {
-        setLetterMotion(letter, "return-push");
-        letter[velocity] = hit[velocity];
-        return;
+      if (hit.motionReason !== "drag" && hit.motionReason !== "flick") {
+        setLetterMotion(hit, "user-impact");
       }
       // Equal masses: trade momentum and give glancing hits a lateral component.
       const restitution = 0.98;
@@ -647,7 +603,6 @@ function moveLetterAxis(body, bodies, dt, axis, velocity, bounds, random) {
       hit[velocity] += forwardImpulse;
       letter[across] -= sideImpulse;
       hit[across] += sideImpulse;
-      if (!userImpact) setLetterMotion(hit, "return-push");
     }
     return;
   }
