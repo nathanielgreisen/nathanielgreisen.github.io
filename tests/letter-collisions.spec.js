@@ -3,6 +3,7 @@ import { stepLetterPhysics } from "../src/interactions.js";
 import { canSlideFormation, glyphsOverlap } from "../src/letter-navigation.js";
 import { planLetterRoutes } from "../src/letter-planner.js";
 import { curveLetterRoute, prepareLetterPlayback, sampleLetterRecovery } from "../src/letter-recovery.js";
+import { overlapLetterMoves } from "../src/letter-schedule.js";
 
 const bounds = { left: 0, top: 0, right: 300, bottom: 120 };
 const size = 10;
@@ -113,11 +114,63 @@ test("the planner clears and refills two tightly packed rows of 16 letters", () 
       letter: { x: x - positions[i].x, y: y - positions[i].y },
     };
   });
-  const route = planLetterRoutes(letters, grid);
-  expect(route).not.toBeNull();
+  const original = planLetterRoutes(letters, grid);
+  expect(original).not.toBeNull();
+  const route = overlapLetterMoves(original, letters, grid);
   expect([...route.at(-1)]).toEqual(Array(32).fill(0));
-  expect(route.slice(1).every((point, index) =>
-    canSlideFormation(letters, route[index], point, glyphsOverlap, grid))).toBe(true);
+  const stretches = route.slice(1).map((point, index) => {
+    const before = route[index];
+    expect(canSlideFormation(letters, before, point, glyphsOverlap, grid)).toBe(true);
+    const distances = letters.map((_, j) => Math.hypot(point[j * 2] - before[j * 2],
+      point[j * 2 + 1] - before[j * 2 + 1]));
+    const distance = Math.max(...distances);
+    return { distance, count: distances.filter(value => value > distance * 0.04).length };
+  });
+  const total = stretches.reduce((sum, step) => sum + step.distance, 0);
+  const solo = stretches.filter(step => step.count === 1).reduce((sum, step) => sum + step.distance, 0);
+  expect(solo / total).toBeLessThan(0.2);
+  expect(stretches.at(-1).count).toBeGreaterThanOrEqual(2);
+});
+
+test("three independent returns move together and finish together", () => {
+  const letters = [
+    atPose(body(0, 0, 0), 100, 20, 10, 20),
+    atPose(body(1, 0, 0), 80, 50, 10, 50),
+    atPose(body(2, 0, 0), 60, 80, 10, 80),
+  ];
+  const serial = [
+    [90, 0, 70, 0, 50, 0],
+    [0, 0, 70, 0, 50, 0],
+    [0, 0, 0, 0, 50, 0],
+    [0, 0, 0, 0, 0, 0],
+  ].map(point => Float64Array.from(point));
+  expect(overlapLetterMoves(serial, letters, bounds)).toEqual([serial[0], serial.at(-1)]);
+});
+
+test("an independent letter moves alongside a swap and shares the finish", () => {
+  const letters = [
+    atPose(body(0, 0, 0), 70, 40, 20, 40),
+    atPose(body(1, 0, 0), 20, 40, 70, 40),
+    atPose(body(2, 0, 0), 90, 90, 30, 90),
+  ];
+  const serial = [
+    [50, 0, -50, 0, 60, 0],
+    [50, -20, -50, 0, 60, 0],
+    [50, -20, 0, 0, 60, 0],
+    [0, -20, 0, 0, 60, 0],
+    [0, 0, 0, 0, 60, 0],
+    [0, 0, 0, 0, 0, 0],
+  ].map(point => Float64Array.from(point));
+  const scheduled = overlapLetterMoves(serial, letters, bounds);
+  expect(scheduled[0]).toEqual(serial[0]);
+  expect(scheduled.at(-1)).toEqual(serial.at(-1));
+  for (let i = 1; i < scheduled.length; i++) {
+    const from = scheduled[i - 1];
+    const to = scheduled[i];
+    expect(canSlideFormation(letters, from, to, glyphsOverlap, bounds)).toBe(true);
+    const movers = letters.filter((_, j) => from[j * 2] !== to[j * 2] || from[j * 2 + 1] !== to[j * 2 + 1]);
+    expect(movers.length).toBeGreaterThanOrEqual(2);
+  }
 });
 
 test("a flick carries momentum through other letters", () => {
