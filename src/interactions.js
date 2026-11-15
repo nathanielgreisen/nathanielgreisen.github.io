@@ -203,7 +203,7 @@ function setupGrid(canvas, reducedMotion, signal) {
 function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   const grid = heading.closest(".home-intro");
   const letters = Array.from(heading.querySelectorAll(".name-letter"), element => ({
-    element, x: 0, y: 0, vx: 0, vy: 0,
+    element, x: 0, y: 0, vx: 0, vy: 0, returnAt: null, returnSpeed: 0,
   }));
   const maskContext = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
   const masks = new Map();
@@ -211,9 +211,13 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   let baseline = 0;
   let drag = null;
   let letterFrame = 0;
+  let returnTimer = 0;
   let lastFrameTime = null;
   const maxLetterSpeed = 2400;
   const flickWindow = 60;
+  const returnDelay = 1000;
+  const homeSpeed = 100;
+  const maxReturnSeconds = 3;
 
   for (const letter of letters) {
     const { element } = letter;
@@ -228,6 +232,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
         left: bounds.left, top: bounds.top, samples: [], movedAt: -Infinity };
       samplePointer(event);
       letter.vx = letter.vy = 0;
+      cancelReturn(letter);
       element.setPointerCapture(event.pointerId);
       element.classList.add("is-dragging");
     }, { signal });
@@ -293,7 +298,13 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   window.addEventListener("blur", () => endDrag(), { signal });
 
   function scheduleLetters() {
+    clearTimeout(returnTimer);
     if (!letterFrame) letterFrame = requestAnimationFrame(animateLetters);
+  }
+
+  function cancelReturn(letter) {
+    letter.returnAt = null;
+    letter.returnSpeed = 0;
   }
 
   function animateLetters(time) {
@@ -304,6 +315,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       scheduleLetters();
       return;
     }
+    heading.classList.add("letters-in-motion");
     const gridBounds = grid.getBoundingClientRect();
     const font = getComputedStyle(heading);
     const canvasFont = `${font.fontStyle} ${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
@@ -336,32 +348,64 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       grabbed.letter.vy = dy / travelTime;
     }
 
+    for (const body of bodies) {
+      const { letter } = body;
+      if (body === grabbed || letter.returnAt === null || time < letter.returnAt) continue;
+      const distance = Math.hypot(letter.x, letter.y);
+      if (!distance) continue;
+      letter.returnSpeed ||= Math.max(homeSpeed, distance / maxReturnSeconds);
+      const speed = Math.min(letter.returnSpeed, distance / dt);
+      letter.vx = -letter.x / distance * speed;
+      letter.vy = -letter.y / distance * speed;
+    }
+
     stepLetterPhysics(bodies, gridBounds, dt);
 
     const wakes = [];
+    let nextReturn = Infinity;
     for (const body of bodies) {
+      const { letter } = body;
       if (body.x !== body.bounds.left || body.y !== body.bounds.top) {
-        placeLetter(body.letter, body.x, body.y, gridBounds, body.bounds);
+        placeLetter(letter, body.x, body.y, gridBounds, body.bounds);
         if (updateGridLetters && !reducedMotion.matches) {
           const wake = makeLetterWake(body, gridBounds, dt);
           if (wake) wakes.push(wake);
         }
       }
       if (body === grabbed) continue;
-      const { letter } = body;
+      if (body.collided) cancelReturn(letter);
+      if (letter.returnSpeed) {
+        if (Math.hypot(letter.x, letter.y) < 0.01) {
+          letter.x = letter.y = letter.vx = letter.vy = 0;
+          letter.element.style.removeProperty("transform");
+          cancelReturn(letter);
+        }
+        continue;
+      }
+
       const speed = Math.hypot(letter.vx, letter.vy);
-      if (!speed) continue;
-      // Kinetic friction subtracts a fixed amount of speed per second.
-      const remaining = Math.max(0, speed - 340 * dt) / speed;
-      letter.vx *= remaining;
-      letter.vy *= remaining;
+      if (speed) {
+        cancelReturn(letter);
+        // Kinetic friction subtracts a fixed amount of speed per second.
+        const remaining = Math.max(0, speed - 340 * dt) / speed;
+        letter.vx *= remaining;
+        letter.vy *= remaining;
+      }
+      if (!letter.vx && !letter.vy && (letter.x || letter.y)) {
+        letter.returnAt ??= time + returnDelay;
+        nextReturn = Math.min(nextReturn, letter.returnAt);
+      }
     }
-    updateGridLetters?.(wakes);
     if (drag || letters.some(letter => letter.vx || letter.vy)) {
+      updateGridLetters?.(wakes);
       scheduleLetters();
     } else {
+      updateGridLetters?.([]);
       lastFrameTime = null;
       heading.classList.remove("letters-in-motion");
+      if (nextReturn < Infinity) {
+        returnTimer = setTimeout(scheduleLetters, Math.max(0, nextReturn - performance.now()));
+      }
     }
   }
 
@@ -388,6 +432,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   return () => {
     observer.disconnect();
     cancelAnimationFrame(letterFrame);
+    clearTimeout(returnTimer);
     if (drag) drag.letter.element.classList.remove("is-dragging");
     heading.classList.remove("letters-in-motion");
   };
@@ -465,6 +510,7 @@ function moveLetterAxis(body, bodies, dt, axis, velocity, min, max) {
       continue;
     }
     const relativeSpeed = speed - other.letter[velocity];
+    body.collided = other.collided = true;
     if (relativeSpeed * speed > 0) {
       // Equal masses: apply opposite impulses along the collision axis.
       const restitution = 0.98;
