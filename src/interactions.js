@@ -1,5 +1,6 @@
 import { makeLetterWake, sampleLetterWake, traceGlyphOutline } from "./letter-wake.js";
 import { impactAngle, planLetterReturn, sampleLetterReturn } from "./letter-motion.js";
+import { createLetterNavigator } from "./letter-navigation.js";
 
 export function mountInteractions(container) {
   const controller = new AbortController();
@@ -203,6 +204,7 @@ function setupGrid(canvas, reducedMotion, signal) {
 
 function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   const grid = heading.closest(".home-intro");
+  const navigate = createLetterNavigator(glyphsOverlap, hasUserMotion);
   const letters = Array.from(heading.querySelectorAll(".name-letter"), (element, index) => ({
     element, index, x: 0, y: 0, vx: 0, vy: 0, returnAt: null, returnSpeed: 0, motionReason: "idle",
   }));
@@ -367,6 +369,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       letter.vy = dy / travelTime;
     }
 
+    navigate(bodies, gridBounds, dt, time);
     stepLetterPhysics(bodies, gridBounds, dt);
 
     const wakes = [];
@@ -497,6 +500,7 @@ function cancelReturn(letter) {
   letter.returnAt = null;
   letter.returnSpeed = 0;
   letter.returnGlide = null;
+  letter.navigationVX = letter.navigationVY = 0;
 }
 
 function setLetterMotion(letter, reason) {
@@ -553,10 +557,7 @@ function moveLetterAxis(body, bodies, dt, axis, velocity, bounds, random) {
           }
         }
       } else if (letter.returnSpeed && hit.returnSpeed) {
-        // Let two returning letters pass when their routes cross.
-        if (yieldToReturningLetter(body, bodies, bounds, axis, Math.abs(speed * dt)) && letter.returnGlide) {
-          letter.returnGlide.detoured = true;
-        }
+        // Physical contact remains solid while the navigator negotiates a route.
         return;
       } else if (letter.returnSpeed) {
         if (hit.motionReason === "idle") {
@@ -587,21 +588,6 @@ function moveLetterAxis(body, bodies, dt, axis, velocity, bounds, random) {
     return;
   }
   if (next < min || next > max) body.letter[velocity] *= -0.35;
-}
-
-function yieldToReturningLetter(body, bodies, bounds, axis, distance) {
-  const side = axis === "x" ? "y" : "x";
-  const min = side === "x" ? bounds.left : bounds.top;
-  const max = side === "x" ? bounds.right - body.bounds.width : bounds.bottom - body.bounds.height;
-  const previous = body[side];
-  for (const direction of [1, -1]) {
-    const next = previous + direction * distance;
-    if (next < min || next > max) continue;
-    body[side] = next;
-    if (!bodies.some(other => other !== body && glyphsOverlap(body, other))) return true;
-    body[side] = previous;
-  }
-  return false;
 }
 
 function setupBubbles(canvas, reducedMotion, updateGridBubbles, signal) {

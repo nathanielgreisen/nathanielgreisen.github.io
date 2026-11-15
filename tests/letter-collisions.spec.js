@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { stepLetterPhysics } from "../src/interactions.js";
 import { planLetterReturn, sampleLetterReturn } from "../src/letter-motion.js";
+import { createLetterNavigator, findLetterRoute } from "../src/letter-navigation.js";
 
 const bounds = { left: 0, top: 0, right: 300, bottom: 120 };
 const size = 10;
@@ -34,13 +35,57 @@ test("automatic returns push a stationary letter through without resetting", () 
   expect(idle.letter.motionReason).toBe("return-push");
 });
 
-test("two returning letters keep their return state when they cross", () => {
-  const left = body(0, 25, 100, "return");
-  const right = body(1, 35, -100, "return");
-  stepLetterPhysics([left, right], bounds, 0.3);
-  expect(left.x).toBeGreaterThan(right.x);
-  expect(left.letter.returnSpeed).toBe(100);
-  expect(right.letter.returnSpeed).toBe(100);
+const overlaps = (a, b) => Math.abs(a.x - b.x) < size && Math.abs(a.y - b.y) < size;
+
+for (const separation of [12, 120]) {
+  test(`letters ${separation}px apart reserve space and swap without touching`, () => {
+    const a = body(0, 35, 100, "return");
+    const b = body(1, 35 + separation, -100, "return");
+    const goals = [35 + separation, 35];
+    const bodies = [a, b];
+    const steer = createLetterNavigator(overlaps, () => false);
+    const dt = 1 / 60;
+    let detoured = false;
+    let arrivedAt;
+
+    for (let tick = 0; tick < 240; tick++) {
+      for (const [i, entry] of bodies.entries()) {
+        Object.assign(entry.letter, {
+          x: entry.x - goals[i],
+          y: entry.y - 40,
+          vx: Math.max(-100, Math.min(100, (goals[i] - entry.x) / dt)),
+          vy: Math.max(-100, Math.min(100, (40 - entry.y) / dt)),
+        });
+        if (Math.hypot(entry.letter.x, entry.letter.y) < 0.009) {
+          entry.letter.returnGlide = null;
+          entry.letter.returnSpeed = 0;
+          entry.letter.returnAt = null;
+          entry.letter.motionReason = "idle";
+        } else {
+          entry.letter.returnGlide ??= { windUp: 0, elapsed: 1 };
+        }
+      }
+      steer(bodies, bounds, dt, tick * dt * 1000);
+      stepLetterPhysics(bodies, bounds, dt);
+      expect(overlaps(a, b)).toBe(false);
+      detoured ||= Math.abs(a.y - 40) > size || Math.abs(b.y - 40) > size;
+      if (bodies.every((entry, i) => Math.hypot(entry.x - goals[i], entry.y - 40) < 0.009)) {
+        arrivedAt = tick * dt;
+        break;
+      }
+    }
+    expect(detoured).toBe(true);
+    expect(arrivedAt).toBeLessThan(3);
+  });
+}
+
+test("a route can use the only open side of a group of blockers", () => {
+  const seeker = body(0, 15, 0, "return");
+  seeker.y = 93;
+  const blockers = [80, 90, 100, 110].map((y, index) => ({ ...body(index + 1, 50, 0), y }));
+  const route = findLetterRoute(seeker, { x: 95, y: 93 }, blockers, bounds, overlaps);
+  expect(route.at(-1)).toEqual({ x: 95, y: 93 });
+  expect(route.some(point => point.y <= 70)).toBe(true);
 });
 
 test("a flick carries user impact through other letters and interrupts a return", () => {

@@ -118,6 +118,52 @@ test("letters wind up and return home on independent timers", async ({ page }) =
   expect(await near.boundingBox()).toEqual(nearHome);
 });
 
+test("two displaced letters find their way home around each other", async ({ page }) => {
+  await page.addInitScript(() => { Math.random = () => 0.75; });
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("index.html");
+  const letters = page.locator(".name-letter");
+  const positions = () => letters.evaluateAll(elements => elements.map(element => {
+    const { x, y } = element.getBoundingClientRect();
+    return [x, y];
+  }));
+  const originalPositions = await positions();
+  const first = letters.nth(8);
+  const second = letters.last();
+  const firstHome = await first.boundingBox();
+  const secondHome = await second.boundingBox();
+
+  async function move(letter, ...points) {
+    const bounds = await letter.boundingBox();
+    const dx = bounds.width / 2;
+    const dy = bounds.height / 2;
+    await page.mouse.move(bounds.x + dx, bounds.y + dy);
+    await page.mouse.down();
+    await expect(letter).toHaveClass(/is-dragging/);
+    for (const point of points) {
+      await page.mouse.move(point.x + dx, point.y + dy);
+      await page.clock.runFor(280);
+    }
+    await page.mouse.up();
+  }
+
+  // Use the open space to the right to arrange a head-on return.
+  const stagingX = firstHome.x + 160;
+  await move(second, { x: stagingX, y: secondHome.y });
+  await move(first, { x: firstHome.x + 5, y: secondHome.y + 4 });
+  await move(second, { x: stagingX, y: firstHome.y - 4 }, { x: firstHome.x + 5, y: firstHome.y - 4 });
+  const swappedFirst = await first.boundingBox();
+  const swappedSecond = await second.boundingBox();
+  expect(swappedFirst.y - firstHome.y).toBeGreaterThan(85);
+  expect(secondHome.y - swappedSecond.y).toBeGreaterThan(85);
+  await page.clock.runFor(5700);
+  expect(await first.boundingBox()).toEqual(firstHome);
+  expect(await second.boundingBox()).toEqual(secondHome);
+  expect(await positions()).toEqual(originalPositions);
+});
+
 test("idle letters drift five pixels and return to their resting positions", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("index.html");
