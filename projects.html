@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Projects | Nathaniel Greisen</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="grid.js" defer></script>
+</head>
+<body>
+  <header class="page-width">
+    <a class="home" href="index.html">Nathaniel Greisen</a>
+    <nav aria-label="Main navigation">
+      <a href="projects.html" aria-current="page">Projects</a>
+      <a href="notes.html">Notes</a>
+      <a href="https://github.com/nathanielgreisen">GitHub</a>
+    </nav>
+  </header>
+  <main class="page-width">
+    <section class="intro" aria-labelledby="page-title">
+      <div class="intro-copy">
+        <h1 id="page-title">Projects</h1>
+        <p>Web tools, a Minecraft plugin, and work on autonomous robots.</p>
+      </div>
+      <canvas class="intro-grid" aria-hidden="true"></canvas>
+    </section>
+    <section class="projects" aria-labelledby="real-projects">
+      <h2 id="real-projects">Software projects</h2>
+      <div class="project-list">
+        <details>
+          <summary>
+            <span class="project-name">Canvas to Notion</span>
+            <span class="description">Copies coursework from Canvas into a Notion table.</span>
+            <span class="toggle" aria-hidden="true"></span>
+          </summary>
+          <div class="project-detail">
+            <p>A Chrome extension reads assignments from a signed-in Canvas tab and sends them through a local Python server. The sync checks the Notion table before writing, skips duplicates, and preserves changes to fields like status on existing assignments. Canvas session cookies stay in Chrome.</p>
+            <a href="https://github.com/nathanielgreisen/Canvas-to-Notion">View source on GitHub</a>
+          </div>
+        </details>
+        <details>
+          <summary>
+            <span class="project-name">Playtime Tracker</span>
+            <span class="description">Tracks time spent on a Minecraft server.</span>
+            <span class="toggle" aria-hidden="true"></span>
+          </summary>
+          <div class="project-detail">
+            <p>This Java plugin stores accumulated playtime in YAML using each player’s UUID. The <code>/playtime</code> command adds the current session to the saved total, so players can see their time before they log off.</p>
+            <a href="https://github.com/nathanielgreisen/PlaytimeTracker">View source on GitHub</a>
+          </div>
+        </details>
+        <details>
+          <summary>
+            <span class="project-name">Robotics and autonomy</span>
+            <span class="description">Autonomous driving for competition robots.</span>
+            <span class="toggle" aria-hidden="true"></span>
+          </summary>
+          <div class="project-detail">
+            <p>I work on C++ software for the Long Knights’ VEX U robots. My focus is the autonomous period, when the robot runs a sequence of actions without driver input. Developing those routines means testing how consistently the robot can repeat a move on the field.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+    <section class="projects" aria-labelledby="sample-projects">
+      <h2 id="sample-projects">Sample projects</h2>
+      <div class="project-list">
+        <details>
+          <summary>
+            <span class="project-name">Robot Log Replay</span>
+            <span class="description">A viewer for recorded robot telemetry.</span>
+            <span class="toggle" aria-hidden="true"></span>
+          </summary>
+          <div class="project-detail">
+            <p>This fictional tool reads position, heading, and motor output from a CSV file. A scrubber lets the operator compare what the robot did with what the autonomous routine expected at that point in time.</p>
+          </div>
+        </details>
+        <details>
+          <summary>
+            <span class="project-name">Fixture Check</span>
+            <span class="description">A command-line validator for test data.</span>
+            <span class="toggle" aria-hidden="true"></span>
+          </summary>
+          <div class="project-detail">
+            <p>This fictional utility validates JSON fixtures before a test run. It reports missing fields and type mismatches alongside the file and field that caused them.</p>
+          </div>
+        </details>
+      </div>
+    </section>
+  </main>
+  <footer class="page-width">
+    <a href="mailto:nlgreisen@gmail.com">nlgreisen@gmail.com</a>
+    <a href="https://www.linkedin.com/in/nathanielgreisen/">LinkedIn</a>
+  </footer>
+</body>
+</html>

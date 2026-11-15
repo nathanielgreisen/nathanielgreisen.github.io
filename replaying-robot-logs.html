@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Replaying a robot run from a log | Nathaniel Greisen</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="grid.js" defer></script>
+</head>
+<body>
+  <header class="page-width">
+    <a class="home" href="index.html">Nathaniel Greisen</a>
+    <nav aria-label="Main navigation">
+      <a href="projects.html">Projects</a>
+      <a href="notes.html" aria-current="page">Notes</a>
+      <a href="https://github.com/nathanielgreisen">GitHub</a>
+    </nav>
+  </header>
+  <main class="page-width">
+    <section class="intro" aria-labelledby="page-title">
+      <div class="intro-copy">
+        <h1 id="page-title">Replaying a robot run from a log</h1>
+        <p>A sample engineering note using fictional telemetry.</p>
+      </div>
+      <canvas class="intro-grid" aria-hidden="true"></canvas>
+    </section>
+    <article class="article">
+      <h2>Record inputs alongside motion</h2>
+      <p>A position trace tells you where the robot ended up. Recording the target heading and motor commands on the same clock lets you see whether the controller asked for the wrong turn or the robot failed to follow the right command.</p>
+      <div class="telemetry-scroll">
+        <table class="telemetry">
+          <caption>Sample telemetry</caption>
+          <thead>
+            <tr><th scope="col">Time (ms)</th><th scope="col">Target (°)</th><th scope="col">Heading (°)</th><th scope="col">Left motor</th><th scope="col">Right motor</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">1200</th><td>90</td><td>72</td><td>0.38</td><td>−0.38</td></tr>
+            <tr><th scope="row">1220</th><td>90</td><td>76</td><td>0.31</td><td>−0.31</td></tr>
+            <tr><th scope="row">1240</th><td>90</td><td>81</td><td>0.22</td><td>−0.22</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h2 id="fixtures">Turn a short segment into a test fixture</h2>
+      <p>Keep the window around the first wrong command and enough earlier samples to establish the controller’s state. Replay the inputs in timestamp order, then check the behavior that failed. For a turn, that might mean verifying that the steering command changes sign after the heading passes the target.</p>
+      <a href="notes.html">Back to notes</a>
+    </article>
+  </main>
+  <footer class="page-width">
+    <a href="mailto:nlgreisen@gmail.com">nlgreisen@gmail.com</a>
+    <a href="https://www.linkedin.com/in/nathanielgreisen/">LinkedIn</a>
+  </footer>
+</body>
+</html>

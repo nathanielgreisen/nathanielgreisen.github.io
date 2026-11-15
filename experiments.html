@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Drawing the background grid | Nathaniel Greisen</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="grid.js" defer></script>
+</head>
+<body>
+  <header class="page-width">
+    <a class="home" href="index.html">Nathaniel Greisen</a>
+    <nav aria-label="Main navigation">
+      <a href="projects.html">Projects</a>
+      <a href="notes.html" aria-current="page">Notes</a>
+      <a href="https://github.com/nathanielgreisen">GitHub</a>
+    </nav>
+  </header>
+  <main class="page-width">
+    <section class="intro" aria-labelledby="page-title">
+      <div class="intro-copy">
+        <h1 id="page-title">Drawing the background grid</h1>
+        <p>Implementation notes for this site’s canvas background.</p>
+      </div>
+      <canvas class="intro-grid" aria-hidden="true"></canvas>
+    </section>
+    <article class="article">
+      <h2>Deforming the grid</h2>
+      <p>The grid is drawn as straight lines with points sampled along each one. Near the cursor, a point moves outward by an amount that depends on its distance from the cursor. Points outside that radius stay in place.</p>
+      <h2>Drawing behind the page</h2>
+      <p>The introduction handles pointer movement while the canvas sits behind the text. That keeps the text selectable. The grid settles when the pointer leaves, and the animation stops requesting frames once it has settled.</p>
+      <a href="notes.html">Back to notes</a>
+    </article>
+  </main>
+  <footer class="page-width">
+    <a href="mailto:nlgreisen@gmail.com">nlgreisen@gmail.com</a>
+    <a href="https://www.linkedin.com/in/nathanielgreisen/">LinkedIn</a>
+  </footer>
+</body>
+</html>
