@@ -33,6 +33,36 @@ test("the intro grid reacts to the pointer", async ({ page }) => {
   await expect.poll(() => grid.evaluate((canvas, original) => canvas.toDataURL() === original, still)).toBe(false);
 });
 
+test("letter movement bends the grid until the letters settle", async ({ page }) => {
+  await page.addInitScript(() => { Math.random = () => 0.999; });
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:00.100Z"));
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("index.html");
+  const grid = page.locator(".intro-grid");
+  await expect.poll(() => grid.evaluate(canvas => canvas.width)).toBeGreaterThan(300);
+  const readGrid = () => grid.evaluate(canvas => canvas.toDataURL());
+  const initial = await readGrid();
+  const first = page.locator(".name-letter").first();
+  await first.evaluate(letter => {
+    const { x, y, width, height } = letter.getBoundingClientRect();
+    const event = {
+      pointerId: 13, pointerType: "touch", isPrimary: true, button: 0,
+      clientX: x + width / 2, clientY: y + height / 2,
+    };
+    letter.setPointerCapture = () => {};
+    const down = new PointerEvent("pointerdown", { ...event, buttons: 1, bubbles: true });
+    const up = new PointerEvent("pointerup", { ...event, clientY: event.clientY - 20, bubbles: true });
+    Object.defineProperty(up, "timeStamp", { value: down.timeStamp + 38 });
+    letter.dispatchEvent(down);
+    letter.dispatchEvent(up);
+  });
+  await page.clock.runFor(100);
+  expect((await readGrid()) === initial).toBe(false);
+  await page.clock.runFor(2500);
+  expect((await readGrid()) === initial).toBe(true);
+});
+
 test("idle letters drift five pixels and return to their resting positions", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("index.html");

@@ -1,3 +1,5 @@
+import { makeLetterWake, sampleLetterWake, traceGlyphOutline } from "./letter-wake.js";
+
 export function mountInteractions(container) {
   const controller = new AbortController();
   const { signal } = controller;
@@ -5,7 +7,7 @@ export function mountInteractions(container) {
   const grid = setupGrid(container.querySelector(".intro-grid"), reducedMotion, signal);
   const name = container.querySelector(".home-intro #name");
   const bubbleCanvas = container.querySelector(".page-bubbles");
-  const disposeLetters = name && setupNameLetters(name, signal);
+  const disposeLetters = name && setupNameLetters(name, reducedMotion, grid?.updateLetters, signal);
   const disposeBubbles = bubbleCanvas && setupBubbles(bubbleCanvas, reducedMotion, grid?.updateBubbles ?? (() => {}), signal);
 
   for (const row of container.querySelectorAll(".project-list summary")) {
@@ -36,6 +38,7 @@ function setupGrid(canvas, reducedMotion, signal) {
 
   let liveBubbles = [];
   let gridHasBubbles = false;
+  let letterWakes = [];
 
   function localFields() {
     if (!liveBubbles.length) return [];
@@ -50,13 +53,14 @@ function setupGrid(canvas, reducedMotion, signal) {
     });
   }
 
-  function warpPoint(x, y, fields) {
+  function warpPoint(x, y, fields, wakes) {
     const dx = x - bend.x;
     const dy = y - bend.y;
     const cursorForce = Math.max(0, 1 - Math.hypot(dx, dy) / 110) ** 2 * bend.strength;
     let shiftX = dx * cursorForce;
     let shiftY = dy * cursorForce;
     let bubbleHighlight = 0;
+    let letterHighlight = 0;
 
     for (const field of fields) {
       const bx = x - field.x;
@@ -69,9 +73,17 @@ function setupGrid(canvas, reducedMotion, signal) {
       bubbleHighlight = Math.max(bubbleHighlight, force);
     }
 
+    for (const wake of wakes) {
+      const sample = sampleLetterWake(x, y, wake);
+      if (!sample) continue;
+      shiftX += sample.shiftX;
+      shiftY += sample.shiftY;
+      letterHighlight = Math.max(letterHighlight, sample.force);
+    }
+
     const shift = Math.hypot(shiftX, shiftY);
     const scale = shift > 42 ? 42 / shift : 1;
-    return { x: x + shiftX * scale, y: y + shiftY * scale, cursorForce, bubbleHighlight };
+    return { x: x + shiftX * scale, y: y + shiftY * scale, cursorForce, bubbleHighlight, letterHighlight };
   }
 
   function draw() {
@@ -85,15 +97,17 @@ function setupGrid(canvas, reducedMotion, signal) {
       for (let fixed = 0.5; fixed < limit; fixed += spacing) {
         const lineFields = fields.filter(field =>
           Math.abs(fixed - (vertical ? field.x : field.y)) < field.reach);
+        const lineWakes = letterWakes.filter(wake =>
+          vertical ? fixed >= wake.left && fixed <= wake.right : fixed >= wake.top && fixed <= wake.bottom);
         const pointAt = offset => warpPoint(vertical ? fixed : offset,
-          vertical ? offset : fixed, lineFields);
+          vertical ? offset : fixed, lineFields, lineWakes);
         let start = pointAt(0);
         for (let offset = 0; offset < length; offset += 8) {
           const end = pointAt(Math.min(offset + 8, length));
           const x = vertical ? fixed : offset;
           const xWeight = Math.max(0, (x - width * 0.2) / Math.max(1, width * 0.8));
           context.globalAlpha = 0.025 + 0.11 * xWeight +
-            0.33 * start.cursorForce + 0.24 * start.bubbleHighlight;
+            0.33 * start.cursorForce + 0.24 * start.bubbleHighlight + 0.32 * start.letterHighlight;
           context.beginPath();
           context.moveTo(start.x, start.y);
           context.lineTo(end.x, end.y);
@@ -108,6 +122,11 @@ function setupGrid(canvas, reducedMotion, signal) {
   function updateBubbles(bubbles) {
     liveBubbles = bubbles;
     if (gridHasBubbles || localFields().length) schedule();
+  }
+
+  function updateLetters(wakes) {
+    if (wakes.length || letterWakes.length) schedule();
+    letterWakes = wakes;
   }
 
   function resize() {
@@ -165,6 +184,7 @@ function setupGrid(canvas, reducedMotion, signal) {
   reducedMotion.addEventListener("change", () => {
     pointer.inside = false;
     bend.strength = 0;
+    if (reducedMotion.matches) letterWakes = [];
     draw();
   }, { signal });
   const observer = new ResizeObserver(resize);
@@ -172,6 +192,7 @@ function setupGrid(canvas, reducedMotion, signal) {
   resize();
   return {
     updateBubbles,
+    updateLetters,
     dispose() {
       observer.disconnect();
       cancelAnimationFrame(frame);
@@ -179,7 +200,7 @@ function setupGrid(canvas, reducedMotion, signal) {
   };
 }
 
-function setupNameLetters(heading, signal) {
+function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   const grid = heading.closest(".home-intro");
   const letters = Array.from(heading.querySelectorAll(".name-letter"), element => ({
     element, x: 0, y: 0, vx: 0, vy: 0,
@@ -317,9 +338,14 @@ function setupNameLetters(heading, signal) {
 
     stepLetterPhysics(bodies, gridBounds, dt);
 
+    const wakes = [];
     for (const body of bodies) {
       if (body.x !== body.bounds.left || body.y !== body.bounds.top) {
         placeLetter(body.letter, body.x, body.y, gridBounds, body.bounds);
+        if (updateGridLetters && !reducedMotion.matches) {
+          const wake = makeLetterWake(body, gridBounds, dt);
+          if (wake) wakes.push(wake);
+        }
       }
       if (body === grabbed) continue;
       const { letter } = body;
@@ -330,6 +356,7 @@ function setupNameLetters(heading, signal) {
       letter.vx *= remaining;
       letter.vy *= remaining;
     }
+    updateGridLetters?.(wakes);
     if (drag || letters.some(letter => letter.vx || letter.vy)) {
       scheduleLetters();
     } else {
@@ -392,7 +419,7 @@ function measureGlyph(context, font, glyph, baseline) {
     }
     rows.push(runs);
   }
-  return { left, top: top + baseline, width, height, rows };
+  return { left, top: top + baseline, width, height, rows, outline: traceGlyphOutline(pixels, width, height) };
 }
 
 function glyphsOverlap(a, b) {
