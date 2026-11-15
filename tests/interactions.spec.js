@@ -33,6 +33,42 @@ test("the intro grid reacts to the pointer", async ({ page }) => {
   await expect.poll(() => grid.evaluate((canvas, original) => canvas.toDataURL() === original, still)).toBe(false);
 });
 
+test("idle letters drift within two pixels and return to their resting positions", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("index.html");
+  const letter = page.locator(".name-letter").first();
+  const samples = await letter.evaluate(async element => {
+    const animation = element.getAnimations()[0];
+    const { duration } = animation.effect.getTiming();
+    animation.pause();
+    await animation.ready;
+    return [0, 0.25, 0.5, 0.75, 1].map(progress => {
+      animation.currentTime = duration * progress;
+      const { x, y } = element.getBoundingClientRect();
+      return { x, y };
+    });
+  });
+
+  const [origin, firstDrift, midpoint, secondDrift, end] = samples;
+  const distance = point => Math.hypot(point.x - origin.x, point.y - origin.y);
+  expect(distance(firstDrift)).toBeGreaterThan(1);
+  expect(distance(firstDrift)).toBeLessThan(2);
+  expect(distance(secondDrift)).toBeGreaterThan(1);
+  expect(distance(secondDrift)).toBeLessThan(2);
+  expect(midpoint).toEqual(origin);
+  expect(end).toEqual(origin);
+
+  const bounds = await letter.boundingBox();
+  await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+  await page.mouse.down();
+  await expect(letter).toHaveClass(/is-dragging/);
+  expect(await letter.evaluate(element => element.getAnimations().length)).toBe(0);
+  await page.mouse.up();
+  await expect.poll(() => letter.evaluate(element => element.getAnimations().length)).toBe(1);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect.poll(() => letter.evaluate(element => element.getAnimations().length)).toBe(0);
+});
+
 test("a dragged letter transfers momentum to other letters", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("index.html");

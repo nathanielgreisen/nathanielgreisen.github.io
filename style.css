@@ -102,6 +102,34 @@ body.forming-bubble {
   cursor: grabbing;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  #name:not(.letters-in-motion) .name-letter {
+    --drift-x: 1.25px;
+    --drift-y: -1px;
+    animation: letter-drift 14s ease-in-out infinite;
+  }
+
+  #name:not(.letters-in-motion) .name-letter:nth-of-type(even) {
+    --drift-x: -1px;
+    --drift-y: 1.25px;
+    animation-duration: 17s;
+    animation-delay: 0.8s;
+  }
+
+  #name:not(.letters-in-motion) .name-letter:nth-of-type(3n) {
+    --drift-x: 1.5px;
+    --drift-y: 0.75px;
+    animation-duration: 19s;
+    animation-delay: 1.6s;
+  }
+
+  @keyframes letter-drift {
+    0%, 50%, 100% { translate: 0 0; }
+    25% { translate: var(--drift-x) var(--drift-y); }
+    75% { translate: calc(-1 * var(--drift-x)) calc(-1 * var(--drift-y)); }
+  }
+}
+
 .intro p { max-width: 510px; margin: 0; color: var(--muted); font-size: 18px; }
 
 .projects {
