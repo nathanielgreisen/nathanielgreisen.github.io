@@ -43,17 +43,40 @@ function crossing(start, end, rect) {
   return [enter, exit];
 }
 
-function blocks(body, start, end, other, overlaps) {
+function blocks(body, start, end, other, overlaps, sampleStep = 2) {
   const interval = crossing(start, end, obstacle(body, other));
   if (!interval) return false;
   const [first, last] = interval;
-  const steps = Math.max(1, Math.ceil(distance(start, end) * (last - first) / 2));
+  const steps = Math.max(1, Math.ceil(distance(start, end) * (last - first) / sampleStep));
   for (let i = 0; i <= steps; i++) {
     const t = first + (last - first) * i / steps;
     const at = { ...body, x: start.x + (end.x - start.x) * t, y: start.y + (end.y - start.y) * t };
     if (overlaps(at, other)) return true;
   }
   return false;
+}
+
+export function canSlideFormation(bodies, from, to, overlaps) {
+  for (let i = 0; i < bodies.length; i++) {
+    const a = bodies[i];
+    const start = {
+      x: a.bounds.left - a.letter.x + from[i * 2],
+      y: a.bounds.top - a.letter.y + from[i * 2 + 1],
+    };
+    for (let j = i + 1; j < bodies.length; j++) {
+      const b = bodies[j];
+      const other = {
+        ...b,
+        x: b.bounds.left - b.letter.x + from[j * 2],
+        y: b.bounds.top - b.letter.y + from[j * 2 + 1],
+      };
+      const dx = to[i * 2] - from[i * 2] - to[j * 2] + from[j * 2];
+      const dy = to[i * 2 + 1] - from[i * 2 + 1] - to[j * 2 + 1] + from[j * 2 + 1];
+      if (!dx && !dy) continue;
+      if (blocks(a, start, { x: start.x + dx, y: start.y + dy }, other, overlaps, 0.5)) return false;
+    }
+  }
+  return true;
 }
 
 export function findLetterRoute(body, destination, others, bounds, overlaps) {
@@ -151,6 +174,11 @@ export function createLetterNavigator(overlaps, isUserMotion) {
   let reservation = null;
   let nextSearch = 0;
 
+  function reset() {
+    reservation = null;
+    nextSearch = 0;
+  }
+
   function follow(body, route, dt) {
     while (route.length > 1 && distance(body, route[0]) < 4) route.shift();
     const target = route[0];
@@ -168,7 +196,7 @@ export function createLetterNavigator(overlaps, isUserMotion) {
     letter.vy = letter.navigationVY = previousY + (desiredY - previousY) * blend;
   }
 
-  return function steer(bodies, bounds, dt, time) {
+  function steer(bodies, bounds, dt, time) {
     const returning = bodies.filter(body => body.letter.returnGlide);
     if (reservation) {
       const { participants, phases } = reservation;
@@ -246,5 +274,7 @@ export function createLetterNavigator(overlaps, isUserMotion) {
         body.letter.vx = body.letter.vy = 0;
       }
     }
-  };
+  }
+
+  return { steer, reset };
 }

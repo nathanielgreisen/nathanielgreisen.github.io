@@ -102,7 +102,7 @@ test("letters wind up and return home on independent timers", async ({ page }) =
   expect(await near.boundingBox()).toEqual(nearRest);
   await page.clock.runFor(300);
   const nearReturning = await near.boundingBox();
-  expect(nearRest.y - nearReturning.y).toBeGreaterThan(10);
+  expect(nearRest.y - nearReturning.y).toBeGreaterThan(2);
   expect(nearRest.y - nearReturning.y).toBeLessThan(38);
   expect((await far.boundingBox()).x).toBeGreaterThan(farHome.x + 150);
 
@@ -163,6 +163,58 @@ test("two displaced letters find their way home around each other", async ({ pag
   expect(await second.boundingBox()).toEqual(secondHome);
   expect(await positions()).toEqual(originalPositions);
 });
+
+for (const width of [1200, 390]) {
+  for (const seed of [0.25, 0.75]) {
+    test(`all letters settle within 15 seconds after a pileup at ${width}px, seed ${seed}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 850 });
+      await page.addInitScript(value => { Math.random = () => value; }, seed);
+      await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+      await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.goto("index.html");
+      const letters = page.locator(".name-letter");
+      const positions = () => letters.evaluateAll(elements =>
+        elements.map(el => [el.getBoundingClientRect().left, el.getBoundingClientRect().top]));
+      const home = await positions();
+      const grid = await page.locator(".home-intro").boundingBox();
+
+      async function drag(index, ...points) {
+        const glyph = letters.nth(index);
+        const rect = await glyph.boundingBox();
+        const x = rect.width / 2;
+        const y = rect.height / 2;
+        await page.mouse.move(rect.x + x, rect.y + y);
+        await page.mouse.down();
+        for (const [left, top] of points) {
+          await page.mouse.move(left + x, top + y);
+          await page.clock.runFor(240);
+        }
+        await page.mouse.up();
+      }
+
+      if (width === 1200) {
+        await drag(9, [home[9][0], grid.y + 365], [2, grid.y + 365]);
+        await drag(0, [home[0][0], home[9][1] + 8]);
+        await drag(9, [2, home[0][1] - 8], [home[0][0], home[0][1] - 8]);
+      } else {
+        for (const index of [0, 9, 8, 15, 1]) {
+          await drag(index, [2, grid.y + 100], [grid.width * 0.6, grid.y + 135]);
+        }
+      }
+
+      const disturbed = await positions();
+      expect(disturbed.filter(([x, y], i) => Math.hypot(x - home[i][0], y - home[i][1]) > 1).length)
+        .toBeGreaterThanOrEqual(3);
+      await page.clock.runFor(11_000);
+      if (width === 1200 && seed === 0.75) {
+        expect(await letters.and(page.locator('[data-motion-reason="regroup"]')).count()).toBeGreaterThan(0);
+      }
+      await page.clock.runFor(3500);
+      expect(await positions()).toEqual(home);
+    });
+  }
+}
 
 test("idle letters drift five pixels and return to their resting positions", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });

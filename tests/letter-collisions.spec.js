@@ -1,7 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { stepLetterPhysics } from "../src/interactions.js";
 import { planLetterReturn, sampleLetterReturn } from "../src/letter-motion.js";
-import { createLetterNavigator, findLetterRoute } from "../src/letter-navigation.js";
+import { canSlideFormation, createLetterNavigator, findLetterRoute } from "../src/letter-navigation.js";
+import { createLetterHistory, sampleLetterRecovery } from "../src/letter-recovery.js";
 
 const bounds = { left: 0, top: 0, right: 300, bottom: 120 };
 const size = 10;
@@ -43,7 +44,7 @@ for (const separation of [12, 120]) {
     const b = body(1, 35 + separation, -100, "return");
     const goals = [35 + separation, 35];
     const bodies = [a, b];
-    const steer = createLetterNavigator(overlaps, () => false);
+    const { steer } = createLetterNavigator(overlaps, () => false);
     const dt = 1 / 60;
     let detoured = false;
     let arrivedAt;
@@ -86,6 +87,34 @@ test("a route can use the only open side of a group of blockers", () => {
   const route = findLetterRoute(seeker, { x: 95, y: 93 }, blockers, bounds, overlaps);
   expect(route.at(-1)).toEqual({ x: 95, y: 93 });
   expect(route.some(point => point.y <= 70)).toBe(true);
+});
+
+test("regrouping retraces a safe route when the straight path would cross", () => {
+  const a = body(0, 40, 0);
+  const b = body(1, 10, 0);
+  a.bounds.left = a.x;
+  a.bounds.top = a.y;
+  b.bounds.left = b.x;
+  b.bounds.top = b.y;
+  a.letter.x = 30;
+  b.letter.x = -30;
+  a.letter.y = b.letter.y = 0;
+  const history = createLetterHistory(2);
+  const pose = (...values) => new Float32Array(values);
+  const swapped = pose(30, 0, -30, 0);
+  const clear = (from, to) => canSlideFormation([a, b], from, to, overlaps);
+
+  history.record(pose(0, -20, 0, 0));
+  history.record(pose(30, -20, -30, 0));
+  history.record(swapped);
+  expect(clear(swapped, pose(0, 0, 0, 0))).toBe(false);
+  const trip = history.buildRoute(swapped, clear);
+  expect(trip.route.length).toBeGreaterThan(2);
+  for (let frame = 0; frame <= 240; frame++) {
+    const [ax, ay, bx, by] = sampleLetterRecovery(trip, frame / 240);
+    expect(overlaps({ x: 10 + ax, y: 40 + ay }, { x: 40 + bx, y: 40 + by })).toBe(false);
+  }
+  expect(sampleLetterRecovery(trip, 1)).toEqual(pose(0, 0, 0, 0));
 });
 
 test("a flick carries user impact through other letters and interrupts a return", () => {
