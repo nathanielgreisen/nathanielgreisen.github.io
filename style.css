@@ -89,6 +89,17 @@ body.forming-bubble {
 }
 
 .home-intro h1 { font-size: clamp(53px, 8.4vw, 108px); line-height: .94; }
+.name-letter {
+  position: relative;
+  display: inline-block;
+  cursor: grab;
+  touch-action: none;
+}
+.name-letter.is-dragging {
+  z-index: 1;
+  cursor: grabbing;
+}
+
 .intro p { max-width: 510px; margin: 0; color: var(--muted); font-size: 18px; }
 
 .projects {

@@ -148,6 +148,247 @@ if (context) {
   resize();
 }
 
+const nameHeading = document.querySelector(".home-intro #name");
+if (nameHeading) setupNameLetters(nameHeading);
+
+function setupNameLetters(heading) {
+  const grid = heading.closest(".home-intro");
+  const letters = [];
+  const maskContext = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
+  const masks = new Map();
+  let maskStyle = "";
+  let baseline = 0;
+  let drag = null;
+  let letterFrame = 0;
+  let lastFrameTime = null;
+  const maxLetterSpeed = 2400;
+
+  heading.setAttribute("aria-label", heading.innerText.replace(/\s+/g, " ").trim());
+  for (const node of [...heading.childNodes]) {
+    if (node.nodeType !== Node.TEXT_NODE) continue;
+    node.replaceWith(...Array.from(node.textContent, character => {
+      if (!character.trim()) return document.createTextNode(character);
+      const element = document.createElement("span");
+      element.className = "name-letter";
+      element.setAttribute("aria-hidden", "true");
+      element.textContent = character;
+      const letter = { element, x: 0, y: 0, vx: 0, vy: 0 };
+      letters.push(letter);
+      element.addEventListener("pointerdown", event => {
+        if (drag || !event.isPrimary || event.button !== 0) return;
+        event.preventDefault();
+        const bounds = element.getBoundingClientRect();
+        drag = { letter, pointerId: event.pointerId,
+          offsetX: event.clientX - bounds.left, offsetY: event.clientY - bounds.top,
+          left: bounds.left, top: bounds.top, movedAt: -Infinity, vx: 0, vy: 0 };
+        letter.vx = letter.vy = 0;
+        element.setPointerCapture(event.pointerId);
+        element.classList.add("is-dragging");
+      });
+      return element;
+    }));
+  }
+
+  window.addEventListener("pointermove", event => {
+    if (drag?.pointerId !== event.pointerId) return;
+    if (!(event.buttons & 1)) {
+      endDrag();
+      return;
+    }
+    drag.left = event.clientX - drag.offsetX;
+    drag.top = event.clientY - drag.offsetY;
+    drag.movedAt = performance.now();
+    scheduleLetters();
+  });
+
+  function endDrag(flick = false) {
+    if (!drag) return;
+    const recent = flick && performance.now() - drag.movedAt < 80;
+    drag.letter.vx = recent ? drag.vx : 0;
+    drag.letter.vy = recent ? drag.vy : 0;
+    drag.letter.element.classList.remove("is-dragging");
+    drag = null;
+    scheduleLetters();
+  }
+
+  for (const type of ["pointerup", "pointercancel"]) {
+    window.addEventListener(type, event => {
+      if (drag?.pointerId === event.pointerId) endDrag(type === "pointerup");
+    });
+  }
+  window.addEventListener("blur", () => endDrag());
+
+  function scheduleLetters() {
+    if (!letterFrame) letterFrame = requestAnimationFrame(animateLetters);
+  }
+
+  function animateLetters(time) {
+    letterFrame = 0;
+    const dt = lastFrameTime === null ? 1 / 60 : Math.min((time - lastFrameTime) / 1000, 1 / 30);
+    lastFrameTime = time;
+    if (dt <= 0) {
+      scheduleLetters();
+      return;
+    }
+    const gridBounds = grid.getBoundingClientRect();
+    const font = getComputedStyle(heading);
+    const canvasFont = `${font.fontStyle} ${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
+    const style = canvasFont + font.lineHeight;
+    if (style !== maskStyle) {
+      masks.clear();
+      const probe = document.createElement("span");
+      probe.style.display = "inline-block";
+      const first = letters[0].element;
+      first.append(probe);
+      baseline = probe.getBoundingClientRect().bottom - first.getBoundingClientRect().top;
+      probe.remove();
+      maskStyle = style;
+    }
+
+    const bodies = letters.map(letter => {
+      const bounds = letter.element.getBoundingClientRect();
+      const glyph = letter.element.textContent;
+      if (!masks.has(glyph)) masks.set(glyph, measureGlyph(maskContext, canvasFont, glyph, baseline));
+      return { letter, bounds, mask: masks.get(glyph), x: bounds.left, y: bounds.top };
+    });
+    const grabbed = drag && bodies.find(body => body.letter === drag.letter);
+    if (grabbed) {
+      const targetX = Math.max(gridBounds.left, Math.min(drag.left, gridBounds.right - grabbed.bounds.width));
+      const targetY = Math.max(gridBounds.top, Math.min(drag.top, gridBounds.bottom - grabbed.bounds.height));
+      const dx = targetX - grabbed.x;
+      const dy = targetY - grabbed.y;
+      const travelTime = Math.max(dt, Math.hypot(dx, dy) / maxLetterSpeed);
+      grabbed.letter.vx = dx / travelTime;
+      grabbed.letter.vy = dy / travelTime;
+      // Keep the last movement sample when the pointer pauses at the target.
+      if (Math.hypot(dx, dy) > 0.5) grabbed.driven = true;
+    }
+
+    stepLetterPhysics(bodies, gridBounds, dt);
+    if (grabbed?.driven) {
+      drag.vx = grabbed.letter.vx;
+      drag.vy = grabbed.letter.vy;
+    }
+
+    for (const body of bodies) {
+      if (body.x !== body.bounds.left || body.y !== body.bounds.top) {
+        placeLetter(body.letter, body.x, body.y, gridBounds, body.bounds);
+      }
+      if (body === grabbed) continue;
+      const { letter } = body;
+      const speed = Math.hypot(letter.vx, letter.vy);
+      if (!speed) continue;
+      // Kinetic friction subtracts a fixed amount of speed per second.
+      const remaining = Math.max(0, speed - 340 * dt) / speed;
+      letter.vx *= remaining;
+      letter.vy *= remaining;
+    }
+    if (drag || letters.some(letter => letter.vx || letter.vy)) scheduleLetters();
+    else lastFrameTime = null;
+  }
+
+  function placeLetter(letter, left, top, gridBounds, bounds = letter.element.getBoundingClientRect()) {
+    const x = Math.max(gridBounds.left, Math.min(left, gridBounds.right - bounds.width));
+    const y = Math.max(gridBounds.top, Math.min(top, gridBounds.bottom - bounds.height));
+    letter.x += x - bounds.left;
+    letter.y += y - bounds.top;
+    letter.element.style.transform = `translate(${letter.x}px, ${letter.y}px)`;
+  }
+
+  new ResizeObserver(() => {
+    const gridBounds = grid.getBoundingClientRect();
+    for (const letter of letters) {
+      if (!letter.x && !letter.y) continue;
+      const bounds = letter.element.getBoundingClientRect();
+      placeLetter(letter, bounds.left, bounds.top, gridBounds, bounds);
+    }
+  }).observe(grid);
+}
+
+function measureGlyph(context, font, glyph, baseline) {
+  context.font = font;
+  const metrics = context.measureText(glyph);
+  const left = Math.floor(-metrics.actualBoundingBoxLeft) - 1;
+  const top = Math.floor(-metrics.actualBoundingBoxAscent) - 1;
+  const width = Math.ceil(metrics.actualBoundingBoxRight) - left + 1;
+  const height = Math.ceil(metrics.actualBoundingBoxDescent) - top + 1;
+  context.canvas.width = width;
+  context.canvas.height = height;
+  context.font = font;
+  context.fillText(glyph, -left, -top);
+  const pixels = context.getImageData(0, 0, width, height).data;
+  const rows = [];
+  for (let y = 0; y < height; y++) {
+    const runs = [];
+    let start = -1;
+    for (let x = 0; x <= width; x++) {
+      const solid = x < width && pixels[(y * width + x) * 4 + 3] >= 128;
+      if (solid && start < 0) start = x;
+      if (!solid && start >= 0) {
+        runs.push([start, x]);
+        start = -1;
+      }
+    }
+    rows.push(runs);
+  }
+  return { left, top: top + baseline, width, height, rows };
+}
+
+function glyphsOverlap(a, b) {
+  const dx = Math.round(b.x + b.mask.left - a.x - a.mask.left);
+  const dy = Math.round(b.y + b.mask.top - a.y - a.mask.top);
+  if (dx >= a.mask.width || dx + b.mask.width <= 0) return false;
+  const bottom = Math.min(a.mask.height, dy + b.mask.height);
+  for (let y = Math.max(0, dy); y < bottom; y++) {
+    for (const [left, right] of a.mask.rows[y]) {
+      for (const [otherLeft, otherRight] of b.mask.rows[y - dy]) {
+        if (left < otherRight + dx && right > otherLeft + dx) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function stepLetterPhysics(bodies, bounds, dt) {
+  const fastest = Math.max(...bodies.map(({ letter }) => Math.hypot(letter.vx, letter.vy)));
+  // Subdivide motion so thin glyph strokes can't pass through each other.
+  const steps = Math.max(1, Math.ceil(fastest * dt * 2));
+  const step = dt / steps;
+  for (let i = 0; i < steps; i++) {
+    for (const body of bodies) {
+      moveLetterAxis(body, bodies, step, "x", "vx", bounds.left, bounds.right - body.bounds.width);
+      moveLetterAxis(body, bodies, step, "y", "vy", bounds.top, bounds.bottom - body.bounds.height);
+    }
+  }
+}
+
+function moveLetterAxis(body, bodies, dt, axis, velocity, min, max) {
+  const speed = body.letter[velocity];
+  if (!speed) return;
+  const previous = body[axis];
+  const next = previous + speed * dt;
+  body[axis] = Math.max(min, Math.min(max, next));
+
+  for (const other of bodies) {
+    if (other === body || !glyphsOverlap(body, other)) continue;
+    body[axis] = previous;
+    if (glyphsOverlap(body, other)) {
+      body[axis] = Math.max(min, Math.min(max, next));
+      continue;
+    }
+    const relativeSpeed = speed - other.letter[velocity];
+    if (relativeSpeed * speed > 0) {
+      // Equal masses: apply opposite impulses along the collision axis.
+      const restitution = 0.98;
+      const impulse = (1 + restitution) * relativeSpeed / 2;
+      body.letter[velocity] -= impulse;
+      other.letter[velocity] += impulse;
+    }
+    return;
+  }
+  if (next < min || next > max) body.letter[velocity] *= -0.35;
+}
+
 const bubbleCanvas = document.querySelector(".page-bubbles");
 if (bubbleCanvas) setupBubbles(bubbleCanvas);
 
@@ -388,7 +629,8 @@ function setupBubbles(canvas) {
 
   window.addEventListener("pointerdown", event => {
     if (!event.isPrimary || event.pointerType !== "mouse" || event.button !== 0 ||
-        reducedMotion.matches) return;
+        reducedMotion.matches || event.target instanceof Element &&
+        event.target.closest(".name-letter")) return;
     heldBubble = {
       x: event.clientX,
       y: event.clientY,
