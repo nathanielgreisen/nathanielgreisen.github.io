@@ -324,16 +324,16 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
     return pose;
   }
 
-  function regroup(bodies, bounds, time, dt) {
+  function regroup(bodies, bounds, time) {
     if (!recovery) {
       navigate.reset();
+      updateGridLetters?.([]);
       const trip = history.buildRoute(capturePose(bodies), (from, to) =>
         canSlideFormation(bodies, from, to, glyphsOverlap));
       recovery = { started: time, trip };
     }
     const progress = Math.min(1, (time - recovery.started) / regroupDuration);
     const pose = sampleLetterRecovery(recovery.trip, progress);
-    const wakes = [];
     for (const [i, body] of bodies.entries()) {
       const { letter } = body;
       cancelReturn(letter);
@@ -349,12 +349,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       if (body.x === body.bounds.left && body.y === body.bounds.top) continue;
       placeLetter(letter, body.x, body.y, bounds, body.bounds);
       setLetterMotion(letter, "regroup");
-      if (!reducedMotion.matches) {
-        const wake = makeLetterWake(body, bounds, dt);
-        if (wake) wakes.push(wake);
-      }
     }
-    updateGridLetters?.(wakes);
     if (progress < 1) {
       history.record(pose);
       scheduleLetters();
@@ -398,7 +393,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
     });
     const regroupAt = lastInteraction + regroupDelay;
     if (!drag && (recovery || (time >= regroupAt && letters.some(letter => letter.x || letter.y)))) {
-      regroup(bodies, gridBounds, time, dt);
+      regroup(bodies, gridBounds, time);
       return;
     }
     const grabbed = drag && bodies.find(body => body.letter === drag.letter);

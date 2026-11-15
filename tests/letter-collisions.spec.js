@@ -117,6 +117,27 @@ test("regrouping retraces a safe route when the straight path would cross", () =
   expect(sampleLetterRecovery(trip, 1)).toEqual(pose(0, 0, 0, 0));
 });
 
+test("a shorter regroup route leaves an already settled letter in place", () => {
+  const history = createLetterHistory(3);
+  const pose = (...values) => new Float32Array(values);
+  const positions = ([ax, ay, bx, by]) => [{ x: 10 + ax, y: 40 + ay }, { x: 40 + bx, y: 40 + by }];
+  const clear = (from, to) => {
+    for (let step = 0; step <= 64; step++) {
+      const point = from.map((value, i) => value + (to[i] - value) * step / 64);
+      if (overlaps(...positions(point))) return false;
+    }
+    return true;
+  };
+  history.record(pose(0, -20, 0, 0, 80, 40));
+  history.record(pose(30, -20, -30, 0, 20, 30));
+  const trip = history.buildRoute(pose(30, 0, -30, 0, 0, 0), clear);
+  for (let frame = 0; frame <= 120; frame++) {
+    const sample = sampleLetterRecovery(trip, frame / 120);
+    expect(overlaps(...positions(sample))).toBe(false);
+    expect([...sample.slice(4)]).toEqual([0, 0]);
+  }
+});
+
 test("a flick carries user impact through other letters and interrupts a return", () => {
   const flicked = body(0, 10, 500, "flick");
   const middle = body(1, 25, 0);
