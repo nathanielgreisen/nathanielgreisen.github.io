@@ -91,30 +91,31 @@ test("letters return home on independent timers at a steady speed", async ({ pag
   // The far letter should start returning while another letter is still held.
   const next = await grab(near);
   await page.mouse.move(next.x, next.y + 40);
-  await page.clock.runFor(900);
+  await page.clock.runFor(2900);
   const nearRest = await near.boundingBox();
   expect(await far.boundingBox()).toEqual(farRest);
   await page.clock.runFor(300);
-  expect((await far.boundingBox()).x).toBeLessThan(farRest.x - 25);
+  expect((await far.boundingBox()).x).toBeLessThan(farRest.x - 15);
   expect(await near.boundingBox()).toEqual(nearRest);
   await page.mouse.up();
-  await page.clock.runFor(950);
+  await page.clock.runFor(2950);
   expect(await near.boundingBox()).toEqual(nearRest);
   await page.clock.runFor(250);
   const nearReturning = await near.boundingBox();
   expect(nearRest.y - nearReturning.y).toBeGreaterThan(12);
   expect(nearRest.y - nearReturning.y).toBeLessThan(25);
+  expect((await far.boundingBox()).x).toBeGreaterThan(farHome.x + 150);
 
   // Grabbing a letter on its way back starts a fresh idle delay.
   await grab(near);
   await page.clock.runFor(100);
   await page.mouse.up();
-  await page.clock.runFor(900);
+  await page.clock.runFor(1600);
+  expect(await far.boundingBox()).toEqual(farHome);
+  await page.clock.runFor(1300);
   expect(await near.boundingBox()).toEqual(nearReturning);
-  expect((await far.boundingBox()).x).toBeGreaterThan(farHome.x + 70);
   await page.clock.runFor(700);
   expect(await near.boundingBox()).toEqual(nearHome);
-  expect(await far.boundingBox()).toEqual(farHome);
 });
 
 test("idle letters drift five pixels and return to their resting positions", async ({ page }) => {

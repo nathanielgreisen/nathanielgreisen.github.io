@@ -202,8 +202,8 @@ function setupGrid(canvas, reducedMotion, signal) {
 
 function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   const grid = heading.closest(".home-intro");
-  const letters = Array.from(heading.querySelectorAll(".name-letter"), element => ({
-    element, x: 0, y: 0, vx: 0, vy: 0, returnAt: null, returnSpeed: 0,
+  const letters = Array.from(heading.querySelectorAll(".name-letter"), (element, index) => ({
+    element, index, x: 0, y: 0, vx: 0, vy: 0, returnAt: null, returnSpeed: 0, motionReason: "idle",
   }));
   const maskContext = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
   const masks = new Map();
@@ -215,9 +215,9 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   let lastFrameTime = null;
   const maxLetterSpeed = 2400;
   const flickWindow = 60;
-  const returnDelay = 1000;
+  const returnDelay = 3000;
   const homeSpeed = 100;
-  const maxReturnSeconds = 3;
+  const maxReturnSeconds = 5;
 
   for (const letter of letters) {
     const { element } = letter;
@@ -233,6 +233,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       samplePointer(event);
       letter.vx = letter.vy = 0;
       cancelReturn(letter);
+      setLetterMotion(letter, "drag");
       element.setPointerCapture(event.pointerId);
       element.classList.add("is-dragging");
     }, { signal });
@@ -285,6 +286,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
         letter.vy = dy / travelTime;
       }
     }
+    setLetterMotion(letter, letter.vx || letter.vy ? "flick" : "idle");
     letter.element.classList.remove("is-dragging");
     drag = null;
     scheduleLetters();
@@ -300,11 +302,6 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   function scheduleLetters() {
     clearTimeout(returnTimer);
     if (!letterFrame) letterFrame = requestAnimationFrame(animateLetters);
-  }
-
-  function cancelReturn(letter) {
-    letter.returnAt = null;
-    letter.returnSpeed = 0;
   }
 
   function animateLetters(time) {
@@ -354,6 +351,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       const distance = Math.hypot(letter.x, letter.y);
       if (!distance) continue;
       letter.returnSpeed ||= Math.max(homeSpeed, distance / maxReturnSeconds);
+      setLetterMotion(letter, "return");
       const speed = Math.min(letter.returnSpeed, distance / dt);
       letter.vx = -letter.x / distance * speed;
       letter.vy = -letter.y / distance * speed;
@@ -373,12 +371,12 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
         }
       }
       if (body === grabbed) continue;
-      if (body.collided) cancelReturn(letter);
       if (letter.returnSpeed) {
         if (Math.hypot(letter.x, letter.y) < 0.01) {
           letter.x = letter.y = letter.vx = letter.vy = 0;
           letter.element.style.removeProperty("transform");
           cancelReturn(letter);
+          setLetterMotion(letter, "idle");
         }
         continue;
       }
@@ -391,9 +389,12 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
         letter.vx *= remaining;
         letter.vy *= remaining;
       }
-      if (!letter.vx && !letter.vy && (letter.x || letter.y)) {
-        letter.returnAt ??= time + returnDelay;
-        nextReturn = Math.min(nextReturn, letter.returnAt);
+      if (!letter.vx && !letter.vy) {
+        setLetterMotion(letter, "idle");
+        if (letter.x || letter.y) {
+          letter.returnAt ??= time + returnDelay;
+          nextReturn = Math.min(nextReturn, letter.returnAt);
+        }
       }
     }
     if (drag || letters.some(letter => letter.vx || letter.vy)) {
@@ -482,22 +483,42 @@ function glyphsOverlap(a, b) {
   return false;
 }
 
-function stepLetterPhysics(bodies, bounds, dt) {
+function cancelReturn(letter) {
+  letter.returnAt = null;
+  letter.returnSpeed = 0;
+}
+
+function setLetterMotion(letter, reason) {
+  if (letter.motionReason === reason) return;
+  letter.motionReason = reason;
+  letter.element.dataset.motionReason = reason;
+  console.debug(`[letters] ${letter.element.textContent} #${letter.index + 1}: ${reason}`);
+}
+
+function hasUserMotion(letter) {
+  return letter.motionReason === "drag" || Boolean((letter.vx || letter.vy) &&
+    (letter.motionReason === "flick" || letter.motionReason === "user-impact"));
+}
+
+export function stepLetterPhysics(bodies, bounds, dt) {
   const fastest = Math.max(...bodies.map(({ letter }) => Math.hypot(letter.vx, letter.vy)));
   // Subdivide motion so thin glyph strokes can't pass through each other.
   const steps = Math.max(1, Math.ceil(fastest * dt * 2));
   const step = dt / steps;
   for (let i = 0; i < steps; i++) {
     for (const body of bodies) {
-      moveLetterAxis(body, bodies, step, "x", "vx", bounds.left, bounds.right - body.bounds.width);
-      moveLetterAxis(body, bodies, step, "y", "vy", bounds.top, bounds.bottom - body.bounds.height);
+      moveLetterAxis(body, bodies, step, "x", "vx", bounds);
+      moveLetterAxis(body, bodies, step, "y", "vy", bounds);
     }
   }
 }
 
-function moveLetterAxis(body, bodies, dt, axis, velocity, min, max) {
-  const speed = body.letter[velocity];
+function moveLetterAxis(body, bodies, dt, axis, velocity, bounds) {
+  const { letter } = body;
+  const speed = letter[velocity];
   if (!speed) return;
+  const min = axis === "x" ? bounds.left : bounds.top;
+  const max = axis === "x" ? bounds.right - body.bounds.width : bounds.bottom - body.bounds.height;
   const previous = body[axis];
   const next = previous + speed * dt;
   body[axis] = Math.max(min, Math.min(max, next));
@@ -509,18 +530,54 @@ function moveLetterAxis(body, bodies, dt, axis, velocity, min, max) {
       body[axis] = Math.max(min, Math.min(max, next));
       continue;
     }
-    const relativeSpeed = speed - other.letter[velocity];
-    body.collided = other.collided = true;
+    const hit = other.letter;
+    const relativeSpeed = speed - hit[velocity];
     if (relativeSpeed * speed > 0) {
+      const userImpact = hasUserMotion(letter) || hasUserMotion(hit);
+      if (userImpact) {
+        for (const affected of [letter, hit]) {
+          cancelReturn(affected);
+          if (affected.motionReason !== "drag" && affected.motionReason !== "flick") {
+            setLetterMotion(affected, "user-impact");
+          }
+        }
+      } else if (letter.returnSpeed && hit.returnSpeed) {
+        // Let two returning letters pass when their routes cross.
+        yieldToReturningLetter(body, bodies, bounds, axis, Math.abs(speed * dt));
+        return;
+      } else if (letter.returnSpeed) {
+        setLetterMotion(hit, "return-push");
+        hit[velocity] = speed;
+        return;
+      } else if (hit.returnSpeed) {
+        setLetterMotion(letter, "return-push");
+        letter[velocity] = hit[velocity];
+        return;
+      }
       // Equal masses: apply opposite impulses along the collision axis.
       const restitution = 0.98;
       const impulse = (1 + restitution) * relativeSpeed / 2;
-      body.letter[velocity] -= impulse;
-      other.letter[velocity] += impulse;
+      letter[velocity] -= impulse;
+      hit[velocity] += impulse;
+      if (!userImpact) setLetterMotion(hit, "return-push");
     }
     return;
   }
   if (next < min || next > max) body.letter[velocity] *= -0.35;
+}
+
+function yieldToReturningLetter(body, bodies, bounds, axis, distance) {
+  const side = axis === "x" ? "y" : "x";
+  const min = side === "x" ? bounds.left : bounds.top;
+  const max = side === "x" ? bounds.right - body.bounds.width : bounds.bottom - body.bounds.height;
+  const previous = body[side];
+  for (const direction of [1, -1]) {
+    const next = previous + direction * distance;
+    if (next < min || next > max) continue;
+    body[side] = next;
+    if (!bodies.some(other => other !== body && glyphsOverlap(body, other))) return;
+    body[side] = previous;
+  }
 }
 
 function setupBubbles(canvas, reducedMotion, updateGridBubbles, signal) {
