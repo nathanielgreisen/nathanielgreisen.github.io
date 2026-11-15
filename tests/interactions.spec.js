@@ -53,6 +53,54 @@ test("a dragged letter transfers momentum to other letters", async ({ page }) =>
     index > 0 && Math.abs(x - released[index]) > 1)).toBe(true);
 });
 
+test("a flick between animation frames launches a letter at the pointer's speed", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.emulateMedia({ reducedMotion: "reduce" });
+
+  async function flick(duration, releaseOnly = false) {
+    await page.goto("index.html");
+    const letter = page.locator(".name-letter").first();
+    const bounds = await letter.boundingBox();
+    const x = bounds.x + bounds.width / 2;
+    const y = bounds.y + bounds.height / 2;
+    await page.evaluate(() => {
+      window.addEventListener("pointerdown", event => {
+        window.initialPointer = { id: event.pointerId, time: event.timeStamp };
+      }, { once: true });
+    });
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await expect(letter).toHaveClass(/is-dragging/);
+
+    // Deliver the entire flick before giving the animation loop a frame.
+    await page.evaluate(({ x, y, duration, releaseOnly }) => {
+      const { id, time } = window.initialPointer;
+      const events = releaseOnly ? ["pointerup"] : ["pointermove", "pointerup"];
+      for (const type of events) {
+        const moving = type === "pointermove";
+        const event = new PointerEvent(type, {
+          button: moving ? -1 : 0, buttons: moving ? 1 : 0,
+          pointerId: id, pointerType: "mouse", isPrimary: true, clientX: x, clientY: y - 12,
+        });
+        Object.defineProperty(event, "timeStamp", { value: time + duration + (moving ? 0 : 1) });
+        window.dispatchEvent(event);
+      }
+    }, { x, y, duration, releaseOnly });
+    await page.mouse.up();
+    expect((await letter.boundingBox()).y).toBe(bounds.y);
+    await page.clock.runFor(64);
+    return bounds.y - (await letter.boundingBox()).y;
+  }
+
+  const slow = await flick(48);
+  const fast = await flick(6);
+  const releaseOnly = await flick(6, true);
+  expect(slow).toBeGreaterThan(5);
+  expect(fast).toBeGreaterThan(slow * 3);
+  expect(releaseOnly).toBeGreaterThan(slow * 3);
+});
+
 test("a held bubble grows, survives an interrupted release, and pops at the viewport top", async ({ page }) => {
   await page.addInitScript(() => {
     window.bubbleArcs = [];

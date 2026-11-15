@@ -192,6 +192,7 @@ function setupNameLetters(heading, signal) {
   let letterFrame = 0;
   let lastFrameTime = null;
   const maxLetterSpeed = 2400;
+  const flickWindow = 60;
 
   for (const letter of letters) {
     const { element } = letter;
@@ -201,7 +202,8 @@ function setupNameLetters(heading, signal) {
       const bounds = element.getBoundingClientRect();
       drag = { letter, pointerId: event.pointerId,
         offsetX: event.clientX - bounds.left, offsetY: event.clientY - bounds.top,
-        left: bounds.left, top: bounds.top, movedAt: -Infinity, vx: 0, vy: 0 };
+        left: bounds.left, top: bounds.top, samples: [], movedAt: -Infinity };
+      samplePointer(event);
       letter.vx = letter.vy = 0;
       element.setPointerCapture(event.pointerId);
       element.classList.add("is-dragging");
@@ -211,28 +213,58 @@ function setupNameLetters(heading, signal) {
   window.addEventListener("pointermove", event => {
     if (drag?.pointerId !== event.pointerId) return;
     if (!(event.buttons & 1)) {
-      endDrag();
+      endDrag(event);
       return;
     }
+    for (const sample of event.getCoalescedEvents?.() ?? []) samplePointer(sample);
+    samplePointer(event);
     drag.left = event.clientX - drag.offsetX;
     drag.top = event.clientY - drag.offsetY;
-    drag.movedAt = performance.now();
     scheduleLetters();
   }, { signal });
 
-  function endDrag(flick = false) {
+  function samplePointer({ clientX: x, clientY: y, timeStamp: time }) {
+    const { samples } = drag;
+    const previous = samples.at(-1);
+    if (previous && time < previous.time) return;
+    if (previous && (previous.x !== x || previous.y !== y)) drag.movedAt = time;
+    if (!previous || previous.time !== time || previous.x !== x || previous.y !== y) {
+      samples.push({ x, y, time });
+    }
+    // Keep one sample before the window so a single fast move still has a starting point.
+    while (samples.length > 2 && samples[1].time < time - flickWindow) samples.shift();
+  }
+
+  function endDrag(releaseEvent) {
     if (!drag) return;
-    const recent = flick && performance.now() - drag.movedAt < 80;
-    drag.letter.vx = recent ? drag.vx : 0;
-    drag.letter.vy = recent ? drag.vy : 0;
-    drag.letter.element.classList.remove("is-dragging");
+    const { letter, samples } = drag;
+    letter.vx = letter.vy = 0;
+    if (releaseEvent) {
+      samplePointer(releaseEvent);
+      const last = samples.at(-1);
+      if (last.time - drag.movedAt < flickWindow) {
+        const first = samples[0];
+        const previous = samples.findLast(sample => sample.x !== last.x || sample.y !== last.y);
+        // Use the latest direction if the pointer doubled back during the sample window.
+        const forward = (last.x - first.x) * (last.x - previous.x) +
+          (last.y - first.y) * (last.y - previous.y);
+        const start = forward > 0 ? first : previous;
+        const dx = last.x - start.x;
+        const dy = last.y - start.y;
+        const elapsed = Math.min(flickWindow, Math.max(1, last.time - start.time)) / 1000;
+        const travelTime = Math.max(elapsed, Math.hypot(dx, dy) / maxLetterSpeed);
+        letter.vx = dx / travelTime;
+        letter.vy = dy / travelTime;
+      }
+    }
+    letter.element.classList.remove("is-dragging");
     drag = null;
     scheduleLetters();
   }
 
   for (const type of ["pointerup", "pointercancel"]) {
     window.addEventListener(type, event => {
-      if (drag?.pointerId === event.pointerId) endDrag(type === "pointerup");
+      if (drag?.pointerId === event.pointerId) endDrag(type === "pointerup" ? event : undefined);
     }, { signal });
   }
   window.addEventListener("blur", () => endDrag(), { signal });
@@ -279,15 +311,9 @@ function setupNameLetters(heading, signal) {
       const travelTime = Math.max(dt, Math.hypot(dx, dy) / maxLetterSpeed);
       grabbed.letter.vx = dx / travelTime;
       grabbed.letter.vy = dy / travelTime;
-      // Keep the last movement sample when the pointer pauses at the target.
-      if (Math.hypot(dx, dy) > 0.5) grabbed.driven = true;
     }
 
     stepLetterPhysics(bodies, gridBounds, dt);
-    if (grabbed?.driven) {
-      drag.vx = grabbed.letter.vx;
-      drag.vy = grabbed.letter.vy;
-    }
 
     for (const body of bodies) {
       if (body.x !== body.bounds.left || body.y !== body.bounds.top) {
