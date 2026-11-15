@@ -1,7 +1,7 @@
 import { makeLetterWake, sampleLetterWake, traceGlyphOutline } from "./letter-wake.js";
 import { impactAngle } from "./letter-motion.js";
-import { canSlideFormation } from "./letter-navigation.js";
-import { createLetterHistory, sampleLetterRecovery } from "./letter-recovery.js";
+import { glyphsOverlap } from "./letter-navigation.js";
+import { prepareLetterPlayback, sampleLetterRecovery } from "./letter-recovery.js";
 
 export function mountInteractions(container) {
   const controller = new AbortController();
@@ -208,7 +208,6 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   const letters = Array.from(heading.querySelectorAll(".name-letter"), (element, index) => ({
     element, index, x: 0, y: 0, vx: 0, vy: 0, motionReason: "idle",
   }));
-  const history = createLetterHistory(letters.length);
   const maskContext = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
   const masks = new Map();
   let maskStyle = "";
@@ -218,18 +217,18 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   let returnTimer = 0;
   let lastFrameTime = null;
   let returnAt = null;
+  let draft = null;
   let recovery = null;
   const maxLetterSpeed = 2400;
   const flickWindow = 60;
   const returnDelay = 3000;
-  const regroupDuration = 4000;
 
   for (const letter of letters) {
     const { element } = letter;
     element.addEventListener("pointerdown", event => {
       if (drag || !event.isPrimary || event.button !== 0) return;
       event.preventDefault();
-      returnAt = null;
+      cancelPlan();
       if (recovery) {
         recovery = null;
         for (const moving of letters) {
@@ -316,30 +315,48 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
     if (!letterFrame) letterFrame = requestAnimationFrame(animateLetters);
   }
 
-  function capturePose(bodies) {
-    const pose = new Float64Array(letters.length * 2);
-    for (const [i, body] of bodies.entries()) {
-      pose[i * 2] = body.letter.x + (body.x - body.bounds.left);
-      pose[i * 2 + 1] = body.letter.y + (body.y - body.bounds.top);
+  function cancelPlan() {
+    draft?.worker.terminate();
+    draft = null;
+    returnAt = null;
+    delete heading.dataset.returnPlan;
+  }
+
+  function planReturn(bodies, bounds, time) {
+    const worker = new Worker(new URL("./letter-planner-worker.js", import.meta.url), { type: "module" });
+    const request = { worker, route: null };
+    draft = request;
+    returnAt = time + returnDelay;
+    heading.dataset.returnPlan = "planning";
+    function complete(route) {
+      worker.terminate();
+      if (draft !== request) return;
+      request.route = route;
+      heading.dataset.returnPlan = route ? "ready" : "blocked";
+      if (route && performance.now() >= returnAt) scheduleLetters();
     }
-    return pose;
+    worker.addEventListener("message", ({ data }) => complete(data), { once: true });
+    worker.addEventListener("error", () => complete(null), { once: true });
+    worker.postMessage({
+      bounds: { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom },
+      bodies: bodies.map(({ letter, bounds, mask, x, y }) => ({
+        x, y,
+        letter: { x: letter.x, y: letter.y },
+        bounds: { left: x, top: y, width: bounds.width, height: bounds.height },
+        mask: { left: mask.left, top: mask.top, width: mask.width, height: mask.height, rows: mask.rows },
+      })),
+    });
   }
 
   function regroup(bodies, bounds, time) {
     if (!recovery) {
+      const trip = prepareLetterPlayback(draft.route);
+      const duration = Math.min(5000, Math.max(800, trip.total * 7));
+      recovery = { started: time, lastFrame: time, trip, duration };
+      cancelPlan();
       updateGridLetters?.([]);
-      const trip = history.buildRoute(capturePose(bodies), (from, to) =>
-        canSlideFormation(bodies, from, to, glyphsOverlap, bounds));
-      if (!trip) {
-        // Layout changes can invalidate a recorded route. Hold until another interaction.
-        returnAt = null;
-        lastFrameTime = null;
-        heading.classList.remove("letters-in-motion");
-        return;
-      }
-      recovery = { started: time, lastFrame: time, recordedThrough: 0, trip };
     }
-    const progress = Math.min(1, (time - recovery.started) / regroupDuration);
+    const progress = Math.min(1, (time - recovery.started) / recovery.duration);
     const pose = sampleLetterRecovery(recovery.trip, progress);
     const dt = (time - recovery.lastFrame) / 1000;
     recovery.lastFrame = time;
@@ -362,16 +379,9 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
     }
 
     if (progress < 1) {
-      // Keep the crossed waypoints so a later grab can interrupt at this exact pose.
-      while (recovery.recordedThrough < recovery.trip.segment - 1) {
-        history.record(recovery.trip.route[++recovery.recordedThrough]);
-      }
-      history.record(pose);
       scheduleLetters();
     } else {
       recovery = null;
-      returnAt = null;
-      history.reset();
       lastFrameTime = null;
       heading.classList.remove("letters-in-motion");
     }
@@ -407,7 +417,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       if (!masks.has(glyph)) masks.set(glyph, measureGlyph(maskContext, canvasFont, glyph, baseline));
       return { letter, bounds, mask: masks.get(glyph), x: bounds.left, y: bounds.top };
     });
-    if (recovery || (!drag && returnAt !== null && time >= returnAt)) {
+    if (recovery || (!drag && draft?.route && time >= returnAt)) {
       regroup(bodies, gridBounds, time);
       return;
     }
@@ -424,7 +434,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       grabbed.letter.vy = dy / travelTime;
     }
 
-    stepLetterPhysics(bodies, gridBounds, dt, Math.random, () => history.record(capturePose(bodies)));
+    stepLetterPhysics(bodies, gridBounds, dt);
 
     const wakes = [];
     for (const body of bodies) {
@@ -455,11 +465,12 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       lastFrameTime = null;
       heading.classList.remove("letters-in-motion");
       if (letters.some(letter => letter.x || letter.y)) {
-        returnAt ??= time + returnDelay;
-        returnTimer = setTimeout(scheduleLetters, Math.max(0, returnAt - performance.now()));
+        if (!draft) planReturn(bodies, gridBounds, time);
+        if (time < returnAt) {
+          returnTimer = setTimeout(scheduleLetters, Math.max(0, returnAt - performance.now()));
+        }
       } else {
-        returnAt = null;
-        history.reset();
+        cancelPlan();
       }
     }
   }
@@ -473,9 +484,9 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   }
 
   const observer = new ResizeObserver(() => {
-    if (recovery) {
+    if (recovery || draft) {
       recovery = null;
-      returnAt = null;
+      cancelPlan();
       for (const letter of letters) {
         letter.vx = letter.vy = 0;
         setLetterMotion(letter, "idle");
@@ -495,6 +506,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   observer.observe(grid);
   return () => {
     observer.disconnect();
+    cancelPlan();
     cancelAnimationFrame(letterFrame);
     clearTimeout(returnTimer);
     if (drag) drag.letter.element.classList.remove("is-dragging");
@@ -531,21 +543,6 @@ function measureGlyph(context, font, glyph, baseline) {
   return { left, top: top + baseline, width, height, rows, outline: traceGlyphOutline(pixels, width, height) };
 }
 
-function glyphsOverlap(a, b) {
-  const dx = Math.round(b.x + b.mask.left - a.x - a.mask.left);
-  const dy = Math.round(b.y + b.mask.top - a.y - a.mask.top);
-  if (dx >= a.mask.width || dx + b.mask.width <= 0) return false;
-  const bottom = Math.min(a.mask.height, dy + b.mask.height);
-  for (let y = Math.max(0, dy); y < bottom; y++) {
-    for (const [left, right] of a.mask.rows[y]) {
-      for (const [otherLeft, otherRight] of b.mask.rows[y - dy]) {
-        if (left < otherRight + dx && right > otherLeft + dx) return true;
-      }
-    }
-  }
-  return false;
-}
-
 function setLetterMotion(letter, reason) {
   if (letter.motionReason === reason) return;
   letter.motionReason = reason;
@@ -553,18 +550,15 @@ function setLetterMotion(letter, reason) {
   console.debug(`[letters] ${letter.element.textContent} #${letter.index + 1}: ${reason}`);
 }
 
-export function stepLetterPhysics(bodies, bounds, dt, random = Math.random, recordPose) {
+export function stepLetterPhysics(bodies, bounds, dt, random = Math.random) {
   const fastest = Math.max(...bodies.map(({ letter }) => Math.hypot(letter.vx, letter.vy)));
   // Subdivide motion so thin glyph strokes can't pass through each other.
   const steps = Math.max(1, Math.ceil(fastest * dt * 2));
   const step = dt / steps;
   for (let i = 0; i < steps; i++) {
     for (const body of bodies) {
-      const { x, y } = body;
       moveLetterAxis(body, bodies, step, "x", "vx", bounds, random);
-      if (body.x !== x) recordPose?.();
       moveLetterAxis(body, bodies, step, "y", "vy", bounds, random);
-      if (body.y !== y) recordPose?.();
     }
   }
 }

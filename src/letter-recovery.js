@@ -6,95 +6,12 @@ const poseDistance = (a, b) => {
   return largest;
 };
 
-function travelCost(a, b) {
-  let travel = 0;
-  for (let i = 0; i < a.length; i += 2) {
-    travel += Math.hypot(a[i] - b[i], a[i + 1] - b[i + 1]);
+export function prepareLetterPlayback(route) {
+  const lengths = [0];
+  for (let i = 1; i < route.length; i++) {
+    lengths.push(lengths[i - 1] + poseDistance(route[i - 1], route[i]));
   }
-  // Prefer less movement overall and fewer changes of direction.
-  return travel + 6;
-}
-
-function shorterRoute(candidates, clear) {
-  const last = candidates.length - 1;
-  const costs = candidates.map(() => Infinity);
-  const parents = candidates.map(() => -1);
-  costs[0] = 0;
-  for (let end = 1; end <= last; end++) {
-    for (let start = 0; start < end; start++) {
-      const cost = costs[start] + travelCost(candidates[start], candidates[end]);
-      if (cost >= costs[end] || !clear(candidates[start], candidates[end])) continue;
-      costs[end] = cost;
-      parents[end] = start;
-    }
-  }
-  if (parents[last] < 0) return null;
-  const route = [];
-  for (let i = last; i >= 0; i = parents[i]) route.unshift(candidates[i]);
-  return { route, cost: costs[last] };
-}
-
-export function createLetterHistory(count) {
-  const origin = new Float64Array(count * 2);
-  let poses = [origin];
-
-  function record(pose) {
-    if (poseDistance(poses.at(-1), pose) > 0) poses.push(pose);
-  }
-
-  function reset() {
-    poses = [origin];
-  }
-
-  function buildRoute(current, clear) {
-    record(current);
-    let route = [poses.at(-1)];
-    let complete = true;
-    let cursor = poses.length - 1;
-    while (cursor > 0) {
-      // Prefer a coordinated shortcut, falling back to the recorded contact steps.
-      let earlier = 0;
-      if (cursor > 1 && !clear(poses[cursor], origin)) {
-        let stride = Math.min(256, cursor);
-        while (stride > 1 && !clear(poses[cursor], poses[cursor - stride])) stride >>= 1;
-        earlier = cursor - stride;
-      }
-      if (cursor - earlier === 1 && !clear(poses[cursor], poses[earlier])) {
-        complete = false;
-        break;
-      }
-      route.push(poses[earlier]);
-      cursor = earlier;
-    }
-
-    if (!complete || route.length > 2) {
-      const candidates = new Set([0, poses.length - 1]);
-      for (let i = 1; i < 16; i++) candidates.add(Math.round(i * (poses.length - 1) / 16));
-      const samples = [...candidates].sort((a, b) => b - a).map(index => poses[index]);
-      const currentCost = complete
-        ? route.slice(1).reduce((sum, pose, i) => sum + travelCost(route[i], pose), 0)
-        : Infinity;
-      const anchored = Array.from({ length: count }, (_, index) =>
-        Math.hypot(current[index * 2], current[index * 2 + 1]) < 0.01);
-      const fixed = samples.map((pose, i) => i === 0 ? current :
-        pose.map((value, axis) => anchored[Math.floor(axis / 2)] ? 0 : value));
-      const alternatives = [shorterRoute(fixed, clear), shorterRoute(samples, clear)];
-      const best = alternatives.find(option => option && option.cost < currentCost);
-      if (best) {
-        route = best.route;
-        complete = true;
-      }
-    }
-
-    if (!complete) return null;
-    const lengths = [0];
-    for (let i = 1; i < route.length; i++) {
-      lengths.push(lengths[i - 1] + poseDistance(route[i - 1], route[i]));
-    }
-    return { route, lengths, total: lengths.at(-1), segment: 1 };
-  }
-
-  return { record, reset, buildRoute };
+  return { route, lengths, total: lengths.at(-1), segment: 1 };
 }
 
 export function sampleLetterRecovery(trip, progress) {

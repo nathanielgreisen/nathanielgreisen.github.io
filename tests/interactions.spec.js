@@ -96,6 +96,7 @@ test("all letters wait for shared stillness and coast when regrouping is interru
   expect(await first.boundingBox()).toEqual(firstRest);
   await page.mouse.up();
   await page.clock.runFor(2900);
+  await expect(page.locator("#name")).toHaveAttribute("data-return-plan", "ready");
   expect(await first.boundingBox()).toEqual(firstRest);
   expect(await second.boundingBox()).toEqual(secondRest);
 
@@ -113,6 +114,8 @@ test("all letters wait for shared stillness and coast when regrouping is interru
   await page.clock.runFor(3300);
   await expect(second).toHaveAttribute("data-motion-reason", "idle");
   await page.mouse.up();
+  await page.clock.runFor(150);
+  await expect(page.locator("#name")).toHaveAttribute("data-return-plan", "ready");
   await page.clock.runFor(7200);
   expect(await first.boundingBox()).toEqual(firstHome);
   expect(await second.boundingBox()).toEqual(secondHome);
@@ -158,6 +161,8 @@ test("two displaced letters find their way home around each other", async ({ pag
   const swappedSecond = await second.boundingBox();
   expect(swappedFirst.y - firstHome.y).toBeGreaterThan(85);
   expect(secondHome.y - swappedSecond.y).toBeGreaterThan(85);
+  await page.clock.runFor(150);
+  await expect(page.locator("#name")).toHaveAttribute("data-return-plan", "ready");
   await page.clock.runFor(7200);
   expect(await first.boundingBox()).toEqual(firstHome);
   expect(await second.boundingBox()).toEqual(secondHome);
@@ -206,7 +211,9 @@ for (const width of [1200, 390]) {
       const disturbed = await positions();
       expect(disturbed.filter(([x, y], i) => Math.hypot(x - home[i][0], y - home[i][1]) > 1).length)
         .toBeGreaterThanOrEqual(3);
-      await page.clock.runFor(14_500);
+      await page.clock.runFor(2800);
+      await expect(page.locator("#name")).toHaveAttribute("data-return-plan", "ready");
+      await page.clock.runFor(11_700);
       expect(await positions()).toEqual(home);
     });
   }

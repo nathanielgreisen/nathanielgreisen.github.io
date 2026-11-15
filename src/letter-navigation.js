@@ -1,4 +1,19 @@
-function obstacle(body, other) {
+export function glyphsOverlap(a, b) {
+  const dx = Math.round(b.x + b.mask.left - a.x - a.mask.left);
+  const dy = Math.round(b.y + b.mask.top - a.y - a.mask.top);
+  if (dx >= a.mask.width || dx + b.mask.width <= 0) return false;
+  const bottom = Math.min(a.mask.height, dy + b.mask.height);
+  for (let y = Math.max(0, dy); y < bottom; y++) {
+    for (const [left, right] of a.mask.rows[y]) {
+      for (const [otherLeft, otherRight] of b.mask.rows[y - dy]) {
+        if (left < otherRight + dx && right > otherLeft + dx) return true;
+      }
+    }
+  }
+  return false;
+}
+
+export function obstacle(body, other) {
   return {
     left: other.x + other.mask.left - body.mask.left - body.mask.width,
     right: other.x + other.mask.left + other.mask.width - body.mask.left,
@@ -26,7 +41,7 @@ function crossing(start, end, rect) {
   return [enter, exit];
 }
 
-function blocks(body, start, end, other, overlaps) {
+export function blocks(body, start, end, other, overlaps) {
   const rect = obstacle(body, other);
   const interval = crossing(start, end, {
     left: rect.left - 0.5, right: rect.right + 0.5,

@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { stepLetterPhysics } from "../src/interactions.js";
-import { canSlideFormation } from "../src/letter-navigation.js";
-import { createLetterHistory, sampleLetterRecovery } from "../src/letter-recovery.js";
+import { canSlideFormation, glyphsOverlap } from "../src/letter-navigation.js";
+import { planLetterRoutes } from "../src/letter-planner.js";
 
 const bounds = { left: 0, top: 0, right: 300, bottom: 120 };
 const size = 10;
@@ -41,53 +41,53 @@ test("a coordinated route rejects even a brief collision between frames", () => 
   expect(canSlideFormation(bodies, corner, end, touch)).toBe(true);
 });
 
-test("regrouping retraces a safe route when the straight path would cross", () => {
-  const a = body(0, 40, 0);
-  const b = body(1, 10, 0);
-  a.bounds.left = a.x;
-  a.bounds.top = a.y;
-  b.bounds.left = b.x;
-  b.bounds.top = b.y;
-  a.letter.x = 30;
-  b.letter.x = -30;
-  a.letter.y = b.letter.y = 0;
-  const history = createLetterHistory(2);
-  const pose = (...values) => new Float64Array(values);
-  const swapped = pose(30, 0, -30, 0);
-  const clear = (from, to) => canSlideFormation([a, b], from, to, overlaps);
+function atPose(letter, x, y, homeX, homeY) {
+  letter.x = x;
+  letter.y = y;
+  Object.assign(letter.bounds, { left: x, top: y });
+  Object.assign(letter.letter, { x: x - homeX, y: y - homeY });
+  return letter;
+}
 
-  history.record(pose(0, -20, 0, 0));
-  history.record(pose(30, -20, -30, 0));
-  history.record(swapped);
-  expect(clear(swapped, pose(0, 0, 0, 0))).toBe(false);
-  const trip = history.buildRoute(swapped, clear);
-  expect(trip.route.length).toBeGreaterThan(2);
-  for (let frame = 0; frame <= 240; frame++) {
-    const [ax, ay, bx, by] = sampleLetterRecovery(trip, frame / 240);
-    expect(overlaps({ x: 10 + ax, y: 40 + ay }, { x: 40 + bx, y: 40 + by })).toBe(false);
+test("the planner creates a fresh route through a swap using just the current pose", () => {
+  const letters = [
+    atPose(body(0, 0, 0), 55, 40, 20, 40),
+    atPose(body(1, 0, 0), 20, 40, 55, 40),
+    atPose(body(2, 0, 0), 38, 40, 38, 40),
+  ];
+  const route = planLetterRoutes(letters, bounds);
+  expect(route[0]).toEqual(new Float64Array([35, 0, -35, 0, 0, 0]));
+  expect(route.length).toBeGreaterThan(2);
+  expect([...route.at(-1)]).toEqual([0, 0, 0, 0, 0, 0]);
+  for (let step = 1; step < route.length; step++) {
+    expect(canSlideFormation(letters, route[step - 1], route[step], overlaps, bounds)).toBe(true);
   }
-  expect(sampleLetterRecovery(trip, 1)).toEqual(pose(0, 0, 0, 0));
+  expect(route.every(point => point[4] === 0 && point[5] === 0)).toBe(true);
 });
 
-test("a shorter regroup route leaves an already settled letter in place", () => {
-  const history = createLetterHistory(3);
-  const pose = (...values) => new Float64Array(values);
-  const positions = ([ax, ay, bx, by]) => [{ x: 10 + ax, y: 40 + ay }, { x: 40 + bx, y: 40 + by }];
-  const clear = (from, to) => {
-    for (let step = 0; step <= 64; step++) {
-      const point = from.map((value, i) => value + (to[i] - value) * step / 64);
-      if (overlaps(...positions(point))) return false;
-    }
-    return true;
+test("the planner clears and refills two tightly packed rows of 16 letters", () => {
+  const grid = { left: 0, top: 0, right: 370, bottom: 440 };
+  const width = 19;
+  const height = 35;
+  const mask = {
+    left: 0, top: 0, width, height,
+    rows: Array.from({ length: height }, () => [[0, width]]),
   };
-  history.record(pose(0, -20, 0, 0, 80, 40));
-  history.record(pose(30, -20, -30, 0, 20, 30));
-  const trip = history.buildRoute(pose(30, 0, -30, 0, 0, 0), clear);
-  for (let frame = 0; frame <= 120; frame++) {
-    const sample = sampleLetterRecovery(trip, frame / 120);
-    expect(overlaps(...positions(sample))).toBe(false);
-    expect([...sample.slice(4)]).toEqual([0, 0]);
-  }
+  const positions = Array.from({ length: 16 }, (_, i) =>
+    ({ x: 28 + i % 8 * width, y: 164 + Math.floor(i / 8) * height }));
+  const arrangement = [5, 9, 7, 13, 10, 3, 14, 2, 15, 8, 11, 12, 0, 1, 6, 4];
+  const letters = arrangement.map((position, i) => {
+    const { x, y } = positions[position];
+    return {
+      x, y, mask, bounds: { left: x, top: y, width, height },
+      letter: { x: x - positions[i].x, y: y - positions[i].y },
+    };
+  });
+  const route = planLetterRoutes(letters, grid);
+  expect(route).not.toBeNull();
+  expect([...route.at(-1)]).toEqual(Array(32).fill(0));
+  expect(route.slice(1).every((point, index) =>
+    canSlideFormation(letters, route[index], point, glyphsOverlap, grid))).toBe(true);
 });
 
 test("a flick carries momentum through other letters", () => {
