@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { stepLetterPhysics } from "../src/interactions.js";
 import { canSlideFormation, glyphsOverlap } from "../src/letter-navigation.js";
 import { planLetterRoutes } from "../src/letter-planner.js";
+import { curveLetterRoute, prepareLetterPlayback, sampleLetterRecovery } from "../src/letter-recovery.js";
 
 const bounds = { left: 0, top: 0, right: 300, bottom: 120 };
 const size = 10;
@@ -63,6 +64,35 @@ test("the planner creates a fresh route through a swap using just the current po
     expect(canSlideFormation(letters, route[step - 1], route[step], overlaps, bounds)).toBe(true);
   }
   expect(route.every(point => point[4] === 0 && point[5] === 0)).toBe(true);
+});
+
+test("return paths curve in open space and stay straight in a tight lane", () => {
+  const route = [new Float64Array([0, 0]), new Float64Array([160, 0])];
+  const curved = curveLetterRoute(route, () => true, () => 0.75);
+  expect(curved.some(point => Math.abs(point[1]) > 10)).toBe(true);
+  expect(curved[0]).toEqual(route[0]);
+  expect(curved.at(-1)).toEqual(route.at(-1));
+  expect(curveLetterRoute(route, (a, b) => !a[1] && !b[1], () => 0.75)).toEqual(route);
+});
+
+test("rounded return paths preserve collision clearance and vary their pace", () => {
+  const letters = [
+    atPose(body(0, 0, 0), 55, 40, 20, 40),
+    atPose(body(1, 0, 0), 20, 40, 55, 40),
+    atPose(body(2, 0, 0), 38, 40, 38, 40),
+  ];
+  const clear = (from, to) => canSlideFormation(letters, from, to, glyphsOverlap, bounds);
+  const route = planLetterRoutes(letters, bounds);
+  const curved = curveLetterRoute(route, clear, () => 0.75);
+  expect(curved.slice(1).every((point, index) => clear(curved[index], point))).toBe(true);
+
+  const straight = [new Float64Array([0, 0]), new Float64Array([160, 0])];
+  const trip = prepareLetterPlayback(straight, () => 0.3);
+  const points = [0.2, 0.3, 0.4, 0.5, 0.6].map(t => sampleLetterRecovery(trip, t)[0]);
+  const speeds = points.slice(1).map((x, i) => x - points[i]);
+  expect(Math.min(...speeds)).toBeGreaterThan(0);
+  expect(Math.max(...speeds) - Math.min(...speeds)).toBeGreaterThan(2);
+  expect(sampleLetterRecovery(trip, 1)).toEqual(straight[1]);
 });
 
 test("the planner clears and refills two tightly packed rows of 16 letters", () => {
