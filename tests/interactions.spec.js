@@ -33,7 +33,7 @@ test("the intro grid reacts to the pointer", async ({ page }) => {
   await expect.poll(() => grid.evaluate((canvas, original) => canvas.toDataURL() === original, still)).toBe(false);
 });
 
-test("idle letters drift within two pixels and return to their resting positions", async ({ page }) => {
+test("idle letters drift five pixels and return to their resting positions", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("index.html");
   const letter = page.locator(".name-letter").first();
@@ -51,10 +51,8 @@ test("idle letters drift within two pixels and return to their resting positions
 
   const [origin, firstDrift, midpoint, secondDrift, end] = samples;
   const distance = point => Math.hypot(point.x - origin.x, point.y - origin.y);
-  expect(distance(firstDrift)).toBeGreaterThan(1);
-  expect(distance(firstDrift)).toBeLessThan(2);
-  expect(distance(secondDrift)).toBeGreaterThan(1);
-  expect(distance(secondDrift)).toBeLessThan(2);
+  expect(distance(firstDrift)).toBeCloseTo(5);
+  expect(distance(secondDrift)).toBeCloseTo(5);
   expect(midpoint).toEqual(origin);
   expect(end).toEqual(origin);
 

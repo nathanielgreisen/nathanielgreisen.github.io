@@ -104,21 +104,21 @@ body.forming-bubble {
 
 @media (prefers-reduced-motion: no-preference) {
   #name:not(.letters-in-motion) .name-letter {
-    --drift-x: 1.25px;
-    --drift-y: -1px;
+    --drift-x: 4px;
+    --drift-y: -3px;
     animation: letter-drift 14s ease-in-out infinite;
   }
 
   #name:not(.letters-in-motion) .name-letter:nth-of-type(even) {
-    --drift-x: -1px;
-    --drift-y: 1.25px;
+    --drift-x: -3px;
+    --drift-y: 4px;
     animation-duration: 17s;
     animation-delay: 0.8s;
   }
 
   #name:not(.letters-in-motion) .name-letter:nth-of-type(3n) {
-    --drift-x: 1.5px;
-    --drift-y: 0.75px;
+    --drift-x: 4.8px;
+    --drift-y: 1.4px;
     animation-duration: 19s;
     animation-delay: 1.6s;
   }
