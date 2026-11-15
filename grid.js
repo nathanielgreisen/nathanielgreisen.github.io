@@ -17,10 +17,11 @@ if (context) {
   function localFields() {
     if (!liveBubbles.length) return [];
     const bounds = canvas.getBoundingClientRect();
+    const pageTop = bounds.top + window.scrollY;
     return liveBubbles.flatMap(bubble => {
       const reach = bubble.radius * 2.3;
       const x = bubble.x - bounds.left;
-      const y = bubble.y - bounds.top;
+      const y = bubble.y - pageTop;
       if (x + reach < 0 || x - reach > width || y + reach < 0 || y - reach > height) return [];
       return [{ x, y, reach }];
     });
@@ -154,7 +155,7 @@ function setupBubbles(canvas) {
   const context = canvas.getContext("2d");
   if (!context) return;
   let width = 0;
-  let height = 0;
+  let pageHeight = 0;
   let frame = 0;
   let heldBubble = null;
   let floatingBubbles = [];
@@ -169,7 +170,7 @@ function setupBubbles(canvas) {
 
   function radiusAt(time) {
     const heldSeconds = Math.max(0, time - heldBubble.started) / 1000;
-    const limit = Math.min(width, height) * 0.2;
+    const limit = Math.min(width, document.documentElement.clientHeight) * 0.2;
     return Math.min(limit, 7 + 31 * heldSeconds);
   }
 
@@ -207,7 +208,7 @@ function setupBubbles(canvas) {
       : max - Math.sqrt((1 - sample) * (max - min) * (max - peak));
   }
 
-  function mergeOverlaps(positions, time, scrollY) {
+  function mergeOverlaps(positions, time) {
     const currentContacts = new Map();
     const consumed = new Set();
     const merged = [];
@@ -238,7 +239,7 @@ function setupBubbles(canvas) {
           ambient,
           riseSpeed: (a.riseSpeed + b.riseSpeed) / 2,
           x: (a.x + b.x) / 2,
-          y: (a.y + b.y) / 2 + scrollY,
+          y: (a.y + b.y) / 2,
           radius,
           drift: (a.drift + b.drift) / 2,
           released: time
@@ -250,17 +251,17 @@ function setupBubbles(canvas) {
     contacts = currentContacts;
     if (!merged.length) return positions;
     floatingBubbles = floatingBubbles.filter(bubble => !consumed.has(bubble.id)).concat(merged);
-    return positions.filter(bubble => !consumed.has(bubble.id))
-      .concat(merged.map(bubble => ({ ...bubble, y: bubble.y - scrollY })));
+    return positions.filter(bubble => !consumed.has(bubble.id)).concat(merged);
   }
 
   function drawBubbles(time) {
-    const scrollY = window.scrollY;
+    const viewportTop = window.scrollY;
     const centers = [];
     if (heldBubble) {
       const radius = radiusAt(time);
-      centers.push({ x: heldBubble.x, y: heldBubble.y, radius });
-      drawBubble(heldBubble.x, heldBubble.y, radius);
+      const y = heldBubble.y + viewportTop;
+      centers.push({ x: heldBubble.x, y, radius });
+      drawBubble(heldBubble.x, y, radius);
     }
 
     const positions = [];
@@ -268,23 +269,21 @@ function setupBubbles(canvas) {
       const seconds = Math.max(0, time - bubble.released) / 1000;
       const x = bubble.x + seconds * bubble.drift + Math.sin(seconds * 2.6) * 7;
       const riseSpeed = bubble.riseSpeed ?? 62 + bubble.radius * 0.34;
-      const y = bubble.y - scrollY - seconds * riseSpeed;
+      const y = bubble.y - seconds * riseSpeed;
       const r = bubble.radius;
-      if (y - r <= 0 || (y - r < height && (x - r <= 0 || x + r >= width))) {
-        pops.push(makePop(x, Math.max(r, y) + scrollY, r, time));
+      if (y - r <= viewportTop || x - r <= 0 || x + r >= width) {
+        pops.push(makePop(x, Math.max(viewportTop + r, y), r, time));
         return false;
       }
-      if (y - r < height) {
-        positions.push({ id: bubble.id, x, y, radius: r, drift: bubble.drift,
-          ambient: bubble.ambient, riseSpeed });
-      }
+      positions.push({ id: bubble.id, x, y, radius: r, drift: bubble.drift,
+        ambient: bubble.ambient, riseSpeed });
       return true;
     });
 
-    for (const bubble of mergeOverlaps(positions, time, scrollY)) {
-      if (bubble.y <= bubble.radius) {
+    for (const bubble of mergeOverlaps(positions, time)) {
+      if (bubble.y - bubble.radius <= viewportTop) {
         floatingBubbles = floatingBubbles.filter(({ id }) => id !== bubble.id);
-        pops.push(makePop(bubble.x, bubble.radius + scrollY, bubble.radius, time));
+        pops.push(makePop(bubble.x, viewportTop + bubble.radius, bubble.radius, time));
         continue;
       }
       centers.push(bubble);
@@ -300,7 +299,7 @@ function setupBubbles(canvas) {
         const drop = particle.downwardCurve * progress ** 2;
         context.beginPath();
         context.arc(pop.x + particle.dx * distance,
-          pop.y - scrollY + particle.dy * distance + drop, 1.15, 0, Math.PI * 2);
+          pop.y + particle.dy * distance + drop, 1.15, 0, Math.PI * 2);
         context.fill();
       }
       return true;
@@ -313,9 +312,9 @@ function setupBubbles(canvas) {
     const bounds = canvas.getBoundingClientRect();
     const scale = window.devicePixelRatio || 1;
     width = bounds.width;
-    height = bounds.height;
+    pageHeight = bounds.height;
     canvas.width = Math.round(width * scale);
-    canvas.height = Math.round(height * scale);
+    canvas.height = Math.round(pageHeight * scale);
     context.setTransform(scale, 0, 0, scale, 0, 0);
     context.strokeStyle = "#aaa";
     context.fillStyle = "#aaa";
@@ -324,7 +323,7 @@ function setupBubbles(canvas) {
 
   function animate(time) {
     frame = 0;
-    context.clearRect(0, 0, width, height);
+    context.clearRect(0, 0, width, pageHeight);
     drawBubbles(time);
     if (heldBubble || floatingBubbles.length || pops.length) schedule();
   }
@@ -337,6 +336,7 @@ function setupBubbles(canvas) {
     clearTimeout(ambientTimer);
     if (reducedMotion.matches || document.hidden) return;
     ambientTimer = setTimeout(() => {
+      const height = document.documentElement.clientHeight;
       if (width > 32 && height > 32 && floatingBubbles.length < 48) {
         const maxRadius = Math.min(maxAmbientRadius, width * 0.2, height * 0.2);
         const radius = 4 + (maxRadius - 4) * Math.random() ** 8;
@@ -363,6 +363,29 @@ function setupBubbles(canvas) {
     schedule();
   }
 
+  function releaseBubble() {
+    if (!heldBubble) return;
+    const time = performance.now();
+    if (floatingBubbles.length >= 48) floatingBubbles.shift();
+    floatingBubbles.push({
+      id: nextBubbleId++,
+      x: heldBubble.x,
+      y: heldBubble.y + window.scrollY,
+      radius: radiusAt(time),
+      released: time,
+      drift: driftRates[nextDrift]
+    });
+    nextDrift = (nextDrift + 1) % driftRates.length;
+    cancelHold();
+  }
+
+  window.addEventListener("webkitmouseforcewillbegin", event => {
+    // Keep Safari's Force Click action from interrupting a bubble hold.
+    if (reducedMotion.matches || !(event.target instanceof Element) ||
+        event.target.closest("a, button, summary, input, textarea, select, [contenteditable]")) return;
+    event.preventDefault();
+  });
+
   window.addEventListener("pointerdown", event => {
     if (!event.isPrimary || event.pointerType !== "mouse" || event.button !== 0 ||
         reducedMotion.matches) return;
@@ -379,7 +402,7 @@ function setupBubbles(canvas) {
   window.addEventListener("pointermove", event => {
     if (heldBubble?.pointerId !== event.pointerId) return;
     if (!(event.buttons & 1)) {
-      cancelHold();
+      releaseBubble();
       return;
     }
     heldBubble.x = event.clientX;
@@ -388,24 +411,15 @@ function setupBubbles(canvas) {
 
   window.addEventListener("pointerup", event => {
     if (heldBubble?.pointerId !== event.pointerId || event.button !== 0) return;
-    const time = performance.now();
-    if (floatingBubbles.length >= 48) floatingBubbles.shift();
-    floatingBubbles.push({
-      id: nextBubbleId++,
-      x: event.clientX,
-      y: event.clientY + window.scrollY,
-      radius: radiusAt(time),
-      released: time,
-      drift: driftRates[nextDrift]
-    });
-    nextDrift = (nextDrift + 1) % driftRates.length;
-    cancelHold();
+    heldBubble.x = event.clientX;
+    heldBubble.y = event.clientY;
+    releaseBubble();
   }, { passive: true });
 
   window.addEventListener("pointercancel", event => {
-    if (heldBubble?.pointerId === event.pointerId) cancelHold();
+    if (heldBubble?.pointerId === event.pointerId) releaseBubble();
   });
-  window.addEventListener("blur", cancelHold);
+  window.addEventListener("blur", releaseBubble);
   window.addEventListener("scroll", schedule, { passive: true });
   reducedMotion.addEventListener("change", () => {
     floatingBubbles = [];
