@@ -4,70 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Nathaniel Greisen</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="grid.js" defer></script>
+  <script type="module" src="/src/main.jsx"></script>
 </head>
 <body>
-  <canvas class="page-bubbles" aria-hidden="true"></canvas>
-  <header class="page-width">
-    <a class="home" href="index.html">Nathaniel Greisen</a>
-    <nav aria-label="Main navigation">
-      <a href="projects.html">Projects</a>
-      <a href="notes.html">Notes</a>
-      <a href="https://github.com/nathanielgreisen">GitHub</a>
-    </nav>
-  </header>
-  <main id="top">
-    <section class="intro home-intro" aria-labelledby="name">
-      <div class="intro-copy page-width">
-        <h1 id="name">Nathaniel<br>Greisen</h1>
-        <p>I study computer science at California Baptist University. I build software for the web and work on autonomous driving with the Long Knights robotics team.</p>
-      </div>
-      <canvas class="intro-grid" aria-hidden="true"></canvas>
-    </section>
-
-    <section class="projects page-width" id="projects" aria-labelledby="projects-heading">
-      <h2 id="projects-heading">Selected projects</h2>
-      <div class="project-list">
-        <details>
-          <summary>
-            <span class="project-name">Canvas to Notion</span>
-            <span class="description">Copies coursework from Canvas into a Notion table.</span>
-            <span class="toggle" aria-hidden="true"></span>
-          </summary>
-          <div class="project-detail">
-            <p>A Chrome extension reads assignments from a signed-in Canvas tab and sends them through a local Python server. The sync checks the Notion table before writing, skips duplicates, and preserves changes to fields like status on existing assignments. Canvas session cookies stay in Chrome.</p>
-            <a href="https://github.com/nathanielgreisen/Canvas-to-Notion">View source on GitHub</a>
-          </div>
-        </details>
-        <details>
-          <summary>
-            <span class="project-name">Playtime Tracker</span>
-            <span class="description">Tracks time spent on a Minecraft server.</span>
-            <span class="toggle" aria-hidden="true"></span>
-          </summary>
-          <div class="project-detail">
-            <p>This Java plugin stores accumulated playtime in YAML using each player’s UUID. The <code>/playtime</code> command adds the current session to the saved total, so players can see their time before they log off.</p>
-            <a href="https://github.com/nathanielgreisen/PlaytimeTracker">View source on GitHub</a>
-          </div>
-        </details>
-        <details>
-          <summary>
-            <span class="project-name">Robotics and autonomy</span>
-            <span class="description">Autonomous driving for competition robots.</span>
-            <span class="toggle" aria-hidden="true"></span>
-          </summary>
-          <div class="project-detail">
-            <p>I work on C++ software for the Long Knights’ VEX U robots. My focus is the autonomous period, when the robot runs a sequence of actions without driver input. Developing those routines means testing how consistently the robot can repeat a move on the field.</p>
-          </div>
-        </details>
-        <a class="more" href="projects.html">View all projects</a>
-      </div>
-    </section>
-  </main>
-  <footer class="page-width">
-    <a href="mailto:nlgreisen@gmail.com">nlgreisen@gmail.com</a>
-    <a href="https://www.linkedin.com/in/nathanielgreisen/">LinkedIn</a>
-  </footer>
+  <div id="root" data-page="index"></div>
 </body>
 </html>

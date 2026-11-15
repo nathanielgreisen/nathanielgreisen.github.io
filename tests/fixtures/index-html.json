@@ -1,0 +1,74 @@
+{
+  "title": "Nathaniel Greisen",
+  "language": "en",
+  "text": [
+    "Nathaniel Greisen\nProjects\nNotes\nGitHub",
+    "Nathaniel\nGreisen\n\nI study computer science at California Baptist University. I build software for the web and work on autonomous driving with the Long Knights robotics team.\n\nSelected projects\nCanvas to Notion\nCopies coursework from Canvas into a Notion table.\n\nA Chrome extension reads assignments from a signed-in Canvas tab and sends them through a local Python server. The sync checks the Notion table before writing, skips duplicates, and preserves changes to fields like status on existing assignments. Canvas session cookies stay in Chrome.\n\nView source on GitHub\nPlaytime Tracker\nTracks time spent on a Minecraft server.\n\nThis Java plugin stores accumulated playtime in YAML using each player’s UUID. The /playtime command adds the current session to the saved total, so players can see their time before they log off.\n\nView source on GitHub\nRobotics and autonomy\nAutonomous driving for competition robots.\n\nI work on C++ software for the Long Knights’ VEX U robots. My focus is the autonomous period, when the robot runs a sequence of actions without driver input. Developing those routines means testing how consistently the robot can repeat a move on the field.\n\nView all projects",
+    "nlgreisen@gmail.com\nLinkedIn"
+  ],
+  "headings": [
+    {
+      "tag": "H1",
+      "id": "name",
+      "text": "Nathaniel\nGreisen"
+    },
+    {
+      "tag": "H2",
+      "id": "projects-heading",
+      "text": "Selected projects"
+    }
+  ],
+  "links": [
+    {
+      "text": "Nathaniel Greisen",
+      "href": "index.html",
+      "current": null
+    },
+    {
+      "text": "Projects",
+      "href": "projects.html",
+      "current": null
+    },
+    {
+      "text": "Notes",
+      "href": "notes.html",
+      "current": null
+    },
+    {
+      "text": "GitHub",
+      "href": "https://github.com/nathanielgreisen",
+      "current": null
+    },
+    {
+      "text": "View source on GitHub",
+      "href": "https://github.com/nathanielgreisen/Canvas-to-Notion",
+      "current": null
+    },
+    {
+      "text": "View source on GitHub",
+      "href": "https://github.com/nathanielgreisen/PlaytimeTracker",
+      "current": null
+    },
+    {
+      "text": "View all projects",
+      "href": "projects.html",
+      "current": null
+    },
+    {
+      "text": "nlgreisen@gmail.com",
+      "href": "mailto:nlgreisen@gmail.com",
+      "current": null
+    },
+    {
+      "text": "LinkedIn",
+      "href": "https://www.linkedin.com/in/nathanielgreisen/",
+      "current": null
+    }
+  ],
+  "disclosures": [
+    "Canvas to Notion\nCopies coursework from Canvas into a Notion table.",
+    "Playtime Tracker\nTracks time spent on a Minecraft server.",
+    "Robotics and autonomy\nAutonomous driving for competition robots."
+  ],
+  "table": []
+}

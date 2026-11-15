@@ -1,0 +1,146 @@
+{
+  "title": "Replaying a robot run from a log | Nathaniel Greisen",
+  "language": "en",
+  "text": [
+    "Nathaniel Greisen\nProjects\nNotes\nGitHub",
+    "Replaying a robot run from a log\n\nA sample engineering note using fictional telemetry.\n\nRecord inputs alongside motion\n\nA position trace tells you where the robot ended up. Recording the target heading and motor commands on the same clock lets you see whether the controller asked for the wrong turn or the robot failed to follow the right command.\n\nSample telemetry\nTime (ms)\tTarget (°)\tHeading (°)\tLeft motor\tRight motor\n1200\t90\t72\t0.38\t−0.38\n1220\t90\t76\t0.31\t−0.31\n1240\t90\t81\t0.22\t−0.22\nTurn a short segment into a test fixture\n\nKeep the window around the first wrong command and enough earlier samples to establish the controller’s state. Replay the inputs in timestamp order, then check the behavior that failed. For a turn, that might mean verifying that the steering command changes sign after the heading passes the target.\n\nBack to notes",
+    "nlgreisen@gmail.com\nLinkedIn"
+  ],
+  "headings": [
+    {
+      "tag": "H1",
+      "id": "page-title",
+      "text": "Replaying a robot run from a log"
+    },
+    {
+      "tag": "H2",
+      "id": "",
+      "text": "Record inputs alongside motion"
+    },
+    {
+      "tag": "H2",
+      "id": "fixtures",
+      "text": "Turn a short segment into a test fixture"
+    }
+  ],
+  "links": [
+    {
+      "text": "Nathaniel Greisen",
+      "href": "index.html",
+      "current": null
+    },
+    {
+      "text": "Projects",
+      "href": "projects.html",
+      "current": null
+    },
+    {
+      "text": "Notes",
+      "href": "notes.html",
+      "current": "page"
+    },
+    {
+      "text": "GitHub",
+      "href": "https://github.com/nathanielgreisen",
+      "current": null
+    },
+    {
+      "text": "Back to notes",
+      "href": "notes.html",
+      "current": null
+    },
+    {
+      "text": "nlgreisen@gmail.com",
+      "href": "mailto:nlgreisen@gmail.com",
+      "current": null
+    },
+    {
+      "text": "LinkedIn",
+      "href": "https://www.linkedin.com/in/nathanielgreisen/",
+      "current": null
+    }
+  ],
+  "disclosures": [],
+  "table": [
+    {
+      "text": "Time (ms)",
+      "scope": "col"
+    },
+    {
+      "text": "Target (°)",
+      "scope": "col"
+    },
+    {
+      "text": "Heading (°)",
+      "scope": "col"
+    },
+    {
+      "text": "Left motor",
+      "scope": "col"
+    },
+    {
+      "text": "Right motor",
+      "scope": "col"
+    },
+    {
+      "text": "1200",
+      "scope": "row"
+    },
+    {
+      "text": "90",
+      "scope": null
+    },
+    {
+      "text": "72",
+      "scope": null
+    },
+    {
+      "text": "0.38",
+      "scope": null
+    },
+    {
+      "text": "−0.38",
+      "scope": null
+    },
+    {
+      "text": "1220",
+      "scope": "row"
+    },
+    {
+      "text": "90",
+      "scope": null
+    },
+    {
+      "text": "76",
+      "scope": null
+    },
+    {
+      "text": "0.31",
+      "scope": null
+    },
+    {
+      "text": "−0.31",
+      "scope": null
+    },
+    {
+      "text": "1240",
+      "scope": "row"
+    },
+    {
+      "text": "90",
+      "scope": null
+    },
+    {
+      "text": "81",
+      "scope": null
+    },
+    {
+      "text": "0.22",
+      "scope": null
+    },
+    {
+      "text": "−0.22",
+      "scope": null
+    }
+  ]
+}

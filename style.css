@@ -17,6 +17,8 @@ body {
   font: 16px/1.6 Arial, sans-serif;
 }
 
+#root { display: contents; }
+
 a { color: inherit; text-underline-offset: 4px; }
 a:hover { text-decoration-thickness: 2px; }
 

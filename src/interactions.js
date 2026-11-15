@@ -1,10 +1,33 @@
-const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-const canvas = document.querySelector(".intro-grid");
-const intro = canvas.parentElement;
-const context = canvas.getContext("2d");
-let updateGridBubbles = () => {};
+export function mountInteractions(container) {
+  const controller = new AbortController();
+  const { signal } = controller;
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const grid = setupGrid(container.querySelector(".intro-grid"), reducedMotion, signal);
+  const name = container.querySelector(".home-intro #name");
+  const bubbleCanvas = container.querySelector(".page-bubbles");
+  const disposeLetters = name && setupNameLetters(name, signal);
+  const disposeBubbles = bubbleCanvas && setupBubbles(bubbleCanvas, reducedMotion, grid?.updateBubbles ?? (() => {}), signal);
 
-if (context) {
+  for (const row of container.querySelectorAll(".project-list summary")) {
+    row.addEventListener("pointermove", event => {
+      if (event.pointerType === "touch") return;
+      const bounds = row.getBoundingClientRect();
+      row.style.setProperty("--pointer-x", (event.clientX - bounds.left) + "px");
+    }, { passive: true, signal });
+  }
+
+  return () => {
+    controller.abort();
+    grid?.dispose();
+    disposeLetters && disposeLetters();
+    disposeBubbles && disposeBubbles();
+  };
+}
+
+function setupGrid(canvas, reducedMotion, signal) {
+  const intro = canvas.parentElement;
+  const context = canvas.getContext("2d");
+  if (!context) return;
   const pointer = { x: 0, y: 0, inside: false };
   const bend = { x: 0, y: 0, strength: 0 };
   let width = 0;
@@ -82,10 +105,10 @@ if (context) {
     context.globalAlpha = 1;
   }
 
-  updateGridBubbles = bubbles => {
+  function updateBubbles(bubbles) {
     liveBubbles = bubbles;
     if (gridHasBubbles || localFields().length) schedule();
-  };
+  }
 
   function resize() {
     const bounds = canvas.getBoundingClientRect();
@@ -130,30 +153,37 @@ if (context) {
     }
     pointer.inside = true;
     schedule();
-  }, { passive: true });
+  }, { passive: true, signal });
 
   function leave() {
     pointer.inside = false;
     schedule();
   }
 
-  intro.addEventListener("pointerleave", leave);
-  intro.addEventListener("pointercancel", leave);
+  intro.addEventListener("pointerleave", leave, { signal });
+  intro.addEventListener("pointercancel", leave, { signal });
   reducedMotion.addEventListener("change", () => {
     pointer.inside = false;
     bend.strength = 0;
     draw();
-  });
-  new ResizeObserver(resize).observe(intro);
+  }, { signal });
+  const observer = new ResizeObserver(resize);
+  observer.observe(intro);
   resize();
+  return {
+    updateBubbles,
+    dispose() {
+      observer.disconnect();
+      cancelAnimationFrame(frame);
+    },
+  };
 }
 
-const nameHeading = document.querySelector(".home-intro #name");
-if (nameHeading) setupNameLetters(nameHeading);
-
-function setupNameLetters(heading) {
+function setupNameLetters(heading, signal) {
   const grid = heading.closest(".home-intro");
-  const letters = [];
+  const letters = Array.from(heading.querySelectorAll(".name-letter"), element => ({
+    element, x: 0, y: 0, vx: 0, vy: 0,
+  }));
   const maskContext = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
   const masks = new Map();
   let maskStyle = "";
@@ -163,30 +193,19 @@ function setupNameLetters(heading) {
   let lastFrameTime = null;
   const maxLetterSpeed = 2400;
 
-  heading.setAttribute("aria-label", heading.innerText.replace(/\s+/g, " ").trim());
-  for (const node of [...heading.childNodes]) {
-    if (node.nodeType !== Node.TEXT_NODE) continue;
-    node.replaceWith(...Array.from(node.textContent, character => {
-      if (!character.trim()) return document.createTextNode(character);
-      const element = document.createElement("span");
-      element.className = "name-letter";
-      element.setAttribute("aria-hidden", "true");
-      element.textContent = character;
-      const letter = { element, x: 0, y: 0, vx: 0, vy: 0 };
-      letters.push(letter);
-      element.addEventListener("pointerdown", event => {
-        if (drag || !event.isPrimary || event.button !== 0) return;
-        event.preventDefault();
-        const bounds = element.getBoundingClientRect();
-        drag = { letter, pointerId: event.pointerId,
-          offsetX: event.clientX - bounds.left, offsetY: event.clientY - bounds.top,
-          left: bounds.left, top: bounds.top, movedAt: -Infinity, vx: 0, vy: 0 };
-        letter.vx = letter.vy = 0;
-        element.setPointerCapture(event.pointerId);
-        element.classList.add("is-dragging");
-      });
-      return element;
-    }));
+  for (const letter of letters) {
+    const { element } = letter;
+    element.addEventListener("pointerdown", event => {
+      if (drag || !event.isPrimary || event.button !== 0) return;
+      event.preventDefault();
+      const bounds = element.getBoundingClientRect();
+      drag = { letter, pointerId: event.pointerId,
+        offsetX: event.clientX - bounds.left, offsetY: event.clientY - bounds.top,
+        left: bounds.left, top: bounds.top, movedAt: -Infinity, vx: 0, vy: 0 };
+      letter.vx = letter.vy = 0;
+      element.setPointerCapture(event.pointerId);
+      element.classList.add("is-dragging");
+    }, { signal });
   }
 
   window.addEventListener("pointermove", event => {
@@ -199,7 +218,7 @@ function setupNameLetters(heading) {
     drag.top = event.clientY - drag.offsetY;
     drag.movedAt = performance.now();
     scheduleLetters();
-  });
+  }, { signal });
 
   function endDrag(flick = false) {
     if (!drag) return;
@@ -214,9 +233,9 @@ function setupNameLetters(heading) {
   for (const type of ["pointerup", "pointercancel"]) {
     window.addEventListener(type, event => {
       if (drag?.pointerId === event.pointerId) endDrag(type === "pointerup");
-    });
+    }, { signal });
   }
-  window.addEventListener("blur", () => endDrag());
+  window.addEventListener("blur", () => endDrag(), { signal });
 
   function scheduleLetters() {
     if (!letterFrame) letterFrame = requestAnimationFrame(animateLetters);
@@ -295,14 +314,20 @@ function setupNameLetters(heading) {
     letter.element.style.transform = `translate(${letter.x}px, ${letter.y}px)`;
   }
 
-  new ResizeObserver(() => {
+  const observer = new ResizeObserver(() => {
     const gridBounds = grid.getBoundingClientRect();
     for (const letter of letters) {
       if (!letter.x && !letter.y) continue;
       const bounds = letter.element.getBoundingClientRect();
       placeLetter(letter, bounds.left, bounds.top, gridBounds, bounds);
     }
-  }).observe(grid);
+  });
+  observer.observe(grid);
+  return () => {
+    observer.disconnect();
+    cancelAnimationFrame(letterFrame);
+    if (drag) drag.letter.element.classList.remove("is-dragging");
+  };
 }
 
 function measureGlyph(context, font, glyph, baseline) {
@@ -389,10 +414,7 @@ function moveLetterAxis(body, bodies, dt, axis, velocity, min, max) {
   if (next < min || next > max) body.letter[velocity] *= -0.35;
 }
 
-const bubbleCanvas = document.querySelector(".page-bubbles");
-if (bubbleCanvas) setupBubbles(bubbleCanvas);
-
-function setupBubbles(canvas) {
+function setupBubbles(canvas, reducedMotion, updateGridBubbles, signal) {
   const context = canvas.getContext("2d");
   if (!context) return;
   let width = 0;
@@ -625,7 +647,7 @@ function setupBubbles(canvas) {
     if (reducedMotion.matches || !(event.target instanceof Element) ||
         event.target.closest("a, button, summary, input, textarea, select, [contenteditable]")) return;
     event.preventDefault();
-  });
+  }, { signal });
 
   window.addEventListener("pointerdown", event => {
     if (!event.isPrimary || event.pointerType !== "mouse" || event.button !== 0 ||
@@ -639,7 +661,7 @@ function setupBubbles(canvas) {
     };
     document.body.classList.add("forming-bubble");
     schedule();
-  }, { passive: true });
+  }, { passive: true, signal });
 
   window.addEventListener("pointermove", event => {
     if (heldBubble?.pointerId !== event.pointerId) return;
@@ -649,37 +671,36 @@ function setupBubbles(canvas) {
     }
     heldBubble.x = event.clientX;
     heldBubble.y = event.clientY;
-  }, { passive: true });
+  }, { passive: true, signal });
 
   window.addEventListener("pointerup", event => {
     if (heldBubble?.pointerId !== event.pointerId || event.button !== 0) return;
     heldBubble.x = event.clientX;
     heldBubble.y = event.clientY;
     releaseBubble();
-  }, { passive: true });
+  }, { passive: true, signal });
 
   window.addEventListener("pointercancel", event => {
     if (heldBubble?.pointerId === event.pointerId) releaseBubble();
-  });
-  window.addEventListener("blur", releaseBubble);
-  window.addEventListener("scroll", schedule, { passive: true });
+  }, { signal });
+  window.addEventListener("blur", releaseBubble, { signal });
+  window.addEventListener("scroll", schedule, { passive: true, signal });
   reducedMotion.addEventListener("change", () => {
     floatingBubbles = [];
     contacts.clear();
     pops = [];
     cancelHold();
     scheduleAmbientBubble();
-  });
-  document.addEventListener("visibilitychange", scheduleAmbientBubble);
-  new ResizeObserver(resize).observe(canvas);
+  }, { signal });
+  document.addEventListener("visibilitychange", scheduleAmbientBubble, { signal });
+  const observer = new ResizeObserver(resize);
+  observer.observe(canvas);
   resize();
   scheduleAmbientBubble();
-}
-
-for (const row of document.querySelectorAll(".project-list summary")) {
-  row.addEventListener("pointermove", event => {
-    if (event.pointerType === "touch") return;
-    const bounds = row.getBoundingClientRect();
-    row.style.setProperty("--pointer-x", (event.clientX - bounds.left) + "px");
-  }, { passive: true });
+  return () => {
+    observer.disconnect();
+    cancelAnimationFrame(frame);
+    clearTimeout(ambientTimer);
+    document.body.classList.remove("forming-bubble");
+  };
 }
