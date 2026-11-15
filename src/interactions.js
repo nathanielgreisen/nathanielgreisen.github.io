@@ -1,4 +1,5 @@
 import { makeLetterWake, sampleLetterWake, traceGlyphOutline } from "./letter-wake.js";
+import { impactAngle, planLetterReturn, sampleLetterReturn } from "./letter-motion.js";
 
 export function mountInteractions(container) {
   const controller = new AbortController();
@@ -216,8 +217,6 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   const maxLetterSpeed = 2400;
   const flickWindow = 60;
   const returnDelay = 3000;
-  const homeSpeed = 100;
-  const maxReturnSeconds = 5;
 
   for (const letter of letters) {
     const { element } = letter;
@@ -340,7 +339,9 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       const targetY = Math.max(gridBounds.top, Math.min(drag.top, gridBounds.bottom - grabbed.bounds.height));
       const dx = targetX - grabbed.x;
       const dy = targetY - grabbed.y;
-      const travelTime = Math.max(dt, Math.hypot(dx, dy) / maxLetterSpeed);
+      const distance = Math.hypot(dx, dy);
+      const followTime = distance < 0.25 ? dt : dt / -Math.expm1(-dt * 24);
+      const travelTime = Math.max(followTime, distance / maxLetterSpeed);
       grabbed.letter.vx = dx / travelTime;
       grabbed.letter.vy = dy / travelTime;
     }
@@ -349,12 +350,21 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       const { letter } = body;
       if (body === grabbed || letter.returnAt === null || time < letter.returnAt) continue;
       const distance = Math.hypot(letter.x, letter.y);
-      if (!distance) continue;
-      letter.returnSpeed ||= Math.max(homeSpeed, distance / maxReturnSeconds);
+      if (!letter.returnGlide) {
+        if (!distance) continue;
+        letter.returnGlide = planLetterReturn(letter.x, letter.y);
+        letter.returnSpeed = distance / letter.returnGlide.duration;
+      }
       setLetterMotion(letter, "return");
-      const speed = Math.min(letter.returnSpeed, distance / dt);
-      letter.vx = -letter.x / distance * speed;
-      letter.vy = -letter.y / distance * speed;
+      const glide = letter.returnGlide;
+      glide.elapsed += dt;
+      const target = glide.detoured ? { x: 0, y: 0 } : sampleLetterReturn(glide, glide.elapsed);
+      const dx = target.x - letter.x;
+      const dy = target.y - letter.y;
+      const maxSpeed = letter.returnSpeed * (glide.detoured ? 1 : 2.25);
+      const travelTime = Math.max(dt, Math.hypot(dx, dy) / maxSpeed);
+      letter.vx = dx / travelTime;
+      letter.vy = dy / travelTime;
     }
 
     stepLetterPhysics(bodies, gridBounds, dt);
@@ -371,8 +381,9 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
         }
       }
       if (body === grabbed) continue;
-      if (letter.returnSpeed) {
-        if (Math.hypot(letter.x, letter.y) < 0.01) {
+      if (letter.returnGlide) {
+        if ((letter.returnGlide.detoured || letter.returnGlide.elapsed >= letter.returnGlide.duration) &&
+            Math.hypot(letter.x, letter.y) < 0.01) {
           letter.x = letter.y = letter.vx = letter.vy = 0;
           letter.element.style.removeProperty("transform");
           cancelReturn(letter);
@@ -384,8 +395,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       const speed = Math.hypot(letter.vx, letter.vy);
       if (speed) {
         cancelReturn(letter);
-        // Kinetic friction subtracts a fixed amount of speed per second.
-        const remaining = Math.max(0, speed - 340 * dt) / speed;
+        const remaining = Math.max(0, speed - (245 + speed * 0.15) * dt) / speed;
         letter.vx *= remaining;
         letter.vy *= remaining;
       }
@@ -397,7 +407,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
         }
       }
     }
-    if (drag || letters.some(letter => letter.vx || letter.vy)) {
+    if (drag || letters.some(letter => letter.vx || letter.vy || letter.returnGlide)) {
       updateGridLetters?.(wakes);
       scheduleLetters();
     } else {
@@ -486,6 +496,7 @@ function glyphsOverlap(a, b) {
 function cancelReturn(letter) {
   letter.returnAt = null;
   letter.returnSpeed = 0;
+  letter.returnGlide = null;
 }
 
 function setLetterMotion(letter, reason) {
@@ -500,20 +511,20 @@ function hasUserMotion(letter) {
     (letter.motionReason === "flick" || letter.motionReason === "user-impact"));
 }
 
-export function stepLetterPhysics(bodies, bounds, dt) {
+export function stepLetterPhysics(bodies, bounds, dt, random = Math.random) {
   const fastest = Math.max(...bodies.map(({ letter }) => Math.hypot(letter.vx, letter.vy)));
   // Subdivide motion so thin glyph strokes can't pass through each other.
   const steps = Math.max(1, Math.ceil(fastest * dt * 2));
   const step = dt / steps;
   for (let i = 0; i < steps; i++) {
     for (const body of bodies) {
-      moveLetterAxis(body, bodies, step, "x", "vx", bounds);
-      moveLetterAxis(body, bodies, step, "y", "vy", bounds);
+      moveLetterAxis(body, bodies, step, "x", "vx", bounds, random);
+      moveLetterAxis(body, bodies, step, "y", "vy", bounds, random);
     }
   }
 }
 
-function moveLetterAxis(body, bodies, dt, axis, velocity, bounds) {
+function moveLetterAxis(body, bodies, dt, axis, velocity, bounds, random) {
   const { letter } = body;
   const speed = letter[velocity];
   if (!speed) return;
@@ -543,9 +554,15 @@ function moveLetterAxis(body, bodies, dt, axis, velocity, bounds) {
         }
       } else if (letter.returnSpeed && hit.returnSpeed) {
         // Let two returning letters pass when their routes cross.
-        yieldToReturningLetter(body, bodies, bounds, axis, Math.abs(speed * dt));
+        if (yieldToReturningLetter(body, bodies, bounds, axis, Math.abs(speed * dt)) && letter.returnGlide) {
+          letter.returnGlide.detoured = true;
+        }
         return;
       } else if (letter.returnSpeed) {
+        if (hit.motionReason === "idle") {
+          const across = axis === "x" ? "vy" : "vx";
+          hit[across] += Math.sin(impactAngle(body, other, axis, speed, random)) * speed;
+        }
         setLetterMotion(hit, "return-push");
         hit[velocity] = speed;
         return;
@@ -554,11 +571,17 @@ function moveLetterAxis(body, bodies, dt, axis, velocity, bounds) {
         letter[velocity] = hit[velocity];
         return;
       }
-      // Equal masses: apply opposite impulses along the collision axis.
+      // Equal masses: trade momentum and give glancing hits a lateral component.
       const restitution = 0.98;
       const impulse = (1 + restitution) * relativeSpeed / 2;
-      letter[velocity] -= impulse;
-      hit[velocity] += impulse;
+      const angle = impactAngle(body, other, axis, impulse, random);
+      const across = axis === "x" ? "vy" : "vx";
+      const forwardImpulse = Math.cos(angle) * impulse;
+      const sideImpulse = Math.sin(angle) * impulse;
+      letter[velocity] -= forwardImpulse;
+      hit[velocity] += forwardImpulse;
+      letter[across] -= sideImpulse;
+      hit[across] += sideImpulse;
       if (!userImpact) setLetterMotion(hit, "return-push");
     }
     return;
@@ -575,9 +598,10 @@ function yieldToReturningLetter(body, bodies, bounds, axis, distance) {
     const next = previous + direction * distance;
     if (next < min || next > max) continue;
     body[side] = next;
-    if (!bodies.some(other => other !== body && glyphsOverlap(body, other))) return;
+    if (!bodies.some(other => other !== body && glyphsOverlap(body, other))) return true;
     body[side] = previous;
   }
+  return false;
 }
 
 function setupBubbles(canvas, reducedMotion, updateGridBubbles, signal) {

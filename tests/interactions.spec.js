@@ -63,7 +63,7 @@ test("letter movement bends the grid until the letters settle", async ({ page })
   expect((await readGrid()) === initial).toBe(true);
 });
 
-test("letters return home on independent timers at a steady speed", async ({ page }) => {
+test("letters wind up and return home on independent timers", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -95,15 +95,15 @@ test("letters return home on independent timers at a steady speed", async ({ pag
   const nearRest = await near.boundingBox();
   expect(await far.boundingBox()).toEqual(farRest);
   await page.clock.runFor(300);
-  expect((await far.boundingBox()).x).toBeLessThan(farRest.x - 15);
+  expect((await far.boundingBox()).x).toBeGreaterThan(farRest.x + 3);
   expect(await near.boundingBox()).toEqual(nearRest);
   await page.mouse.up();
   await page.clock.runFor(2950);
   expect(await near.boundingBox()).toEqual(nearRest);
-  await page.clock.runFor(250);
+  await page.clock.runFor(300);
   const nearReturning = await near.boundingBox();
-  expect(nearRest.y - nearReturning.y).toBeGreaterThan(12);
-  expect(nearRest.y - nearReturning.y).toBeLessThan(25);
+  expect(nearRest.y - nearReturning.y).toBeGreaterThan(10);
+  expect(nearRest.y - nearReturning.y).toBeLessThan(38);
   expect((await far.boundingBox()).x).toBeGreaterThan(farHome.x + 150);
 
   // Grabbing a letter on its way back starts a fresh idle delay.
