@@ -1,5 +1,21 @@
 import { expect, test } from "@playwright/test";
 
+async function quickFlick(letter, { offset, dx = 0, dy, ms }) {
+  await letter.evaluate((element, { offset, dx, dy, ms }) => {
+    const { x, y, width, height } = element.getBoundingClientRect();
+    const event = {
+      pointerId: 21, pointerType: "touch", isPrimary: true, button: 0,
+      clientX: x + width * offset, clientY: y + height * 0.3, bubbles: true,
+    };
+    element.setPointerCapture = () => {};
+    const down = new PointerEvent("pointerdown", { ...event, buttons: 1 });
+    const up = new PointerEvent("pointerup", { ...event, clientX: event.clientX + dx, clientY: event.clientY + dy });
+    Object.defineProperty(up, "timeStamp", { value: down.timeStamp + ms });
+    element.dispatchEvent(down);
+    element.dispatchEvent(up);
+  }, { offset, dx, dy, ms });
+}
+
 test("project disclosures and note links work after hydration", async ({ page }) => {
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
@@ -223,6 +239,46 @@ for (const width of [1200, 390]) {
   }
 }
 
+for (const width of [390, 1200]) {
+  test(`a cluster scattered by quick flicks at ${width}px returns home within 15 seconds`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 850 });
+    await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+    await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("index.html");
+    await page.evaluate(() => {
+      let seed = 2;
+      Math.random = () => {
+        seed = (Math.imul(seed, 1_664_525) + 1_013_904_223) >>> 0;
+        return seed / 2 ** 32;
+      };
+    });
+    const letters = page.locator(".name-letter");
+    const atRest = () => letters.evaluateAll(elements =>
+      elements.every(element => !element.style.transform && !element.firstElementChild.style.rotate));
+    for (const [index, offset, dx, dy] of [
+      [3, 0.282, -113.318, 17.361],
+      [1, 0.481, -88.399, 15.736],
+      [11, 0.547, -118.706, -2.928],
+      [7, 0.389, -140.836, -6.541],
+      [14, 0.669, 72.918, -20.223],
+    ]) {
+      await quickFlick(letters.nth(index), { offset, dx, dy, ms: 50 });
+      await page.clock.runFor(120);
+    }
+    expect(await atRest()).toBe(false);
+
+    const name = page.locator("#name");
+    for (let elapsed = 120; elapsed < 15_000 && !await atRest(); elapsed += 240) {
+      await page.clock.runFor(240);
+      if (await name.getAttribute("data-return-plan") === "planning") {
+        await expect(name).toHaveAttribute("data-return-plan", "ready");
+      }
+    }
+    expect(await atRest()).toBe(true);
+  });
+}
+
 test("the five pixel drift continues through a grab without moving the physics box", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("index.html");
@@ -347,19 +403,7 @@ test("an off-center flick spins a letter, which straightens before the home rout
   await page.mouse.up();
   await page.clock.runFor(20);
 
-  await letter.evaluate(element => {
-    const { x, y, width, height } = element.getBoundingClientRect();
-    const event = {
-      pointerId: 21, pointerType: "touch", isPrimary: true, button: 0,
-      clientX: x + width * 0.15, clientY: y + height * 0.3, bubbles: true,
-    };
-    element.setPointerCapture = () => {};
-    const down = new PointerEvent("pointerdown", { ...event, buttons: 1 });
-    const up = new PointerEvent("pointerup", { ...event, clientY: event.clientY + 18 });
-    Object.defineProperty(up, "timeStamp", { value: down.timeStamp + 40 });
-    element.dispatchEvent(down);
-    element.dispatchEvent(up);
-  });
+  await quickFlick(letter, { offset: 0.15, dy: 18, ms: 40 });
   await page.clock.runFor(120);
   expect(await glyph.evaluate(element => parseFloat(element.style.rotate))).toBeLessThan(-0.05);
 
@@ -379,6 +423,61 @@ test("an off-center flick spins a letter, which straightens before the home rout
   await page.clock.runFor(8200);
   expect(await letter.boundingBox()).toEqual(home);
 });
+
+for (const [side, width] of [["left", 1200], ["right", 390]]) {
+  test(`a letter flicked at the ${side} edge returns without horizontal overflow`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 850 });
+    await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+    await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+    await page.emulateMedia({ reducedMotion: "no-preference" });
+    await page.goto("index.html");
+    const letter = page.locator(".name-letter").last();
+    const home = await letter.boundingBox();
+    const grid = await page.locator(".home-intro").boundingBox();
+    const edge = side === "left" ? grid.x : grid.x + grid.width - home.width;
+    const stagingX = grid.x + grid.width * 0.84;
+    const stagingY = grid.y + 8 + home.height / 2;
+    await page.mouse.move(home.x + home.width / 2, home.y + home.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(stagingX, home.y + home.height / 2);
+    await page.clock.runFor(500);
+    await page.mouse.move(stagingX, stagingY);
+    await page.clock.runFor(500);
+    await page.mouse.move(side === "left" ? 1 : width - 1, stagingY);
+    await page.clock.runFor(800);
+    await page.mouse.up();
+    await page.clock.runFor(64);
+    expect((await letter.boundingBox()).x).toBeCloseTo(edge, 1);
+
+    // Sample the outward part of the drift while the letter touches the wall.
+    await letter.evaluate((element, outward) => {
+      const glyph = element.firstElementChild;
+      const animation = glyph.getAnimations()[0];
+      animation.pause();
+      const { duration, delay } = animation.effect.getTiming();
+      const driftX = parseFloat(getComputedStyle(glyph).getPropertyValue("--drift-x"));
+      animation.currentTime = delay + duration * (Math.sign(driftX) === outward ? 0.25 : 0.75);
+    }, side === "left" ? -1 : 1);
+    const hasOverflow = () => page.evaluate(() =>
+      document.documentElement.scrollWidth > document.documentElement.clientWidth);
+    expect(await hasOverflow()).toBe(false);
+
+    await quickFlick(letter, { offset: side === "left" ? 0.15 : 0.85, dy: 18, ms: 40 });
+    await page.clock.runFor(120);
+    expect(await letter.locator(".name-letter-glyph").evaluate(element => element.style.rotate)).not.toBe("");
+
+    for (let elapsed = 120; elapsed < 15_000; elapsed += 240) {
+      expect(await hasOverflow()).toBe(false);
+      if (!(await letter.getAttribute("style"))?.includes("translate")) break;
+      await page.clock.runFor(240);
+      if (await page.locator("#name").getAttribute("data-return-plan") === "planning") {
+        await expect(page.locator("#name")).toHaveAttribute("data-return-plan", "ready");
+      }
+    }
+    expect(await letter.boundingBox()).toEqual(home);
+    expect(await hasOverflow()).toBe(false);
+  });
+}
 
 test("a held bubble grows, survives an interrupted release, and pops at the viewport top", async ({ page }) => {
   await page.addInitScript(() => {

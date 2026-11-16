@@ -100,6 +100,7 @@ function planFrom(start, bounds, order, evacuate = false) {
   const origin = new Float64Array(bodies.length * 2);
   const route = [pose(bodies)];
   const parked = new Set();
+  const visited = new Set();
   const othersFor = body => bodies.filter(other => other !== body);
   const atHome = body => distance(body, body.home) < 0.001;
   function move(body, path) {
@@ -164,6 +165,10 @@ function planFrom(start, bounds, order, evacuate = false) {
   for (let attempt = 0; attempt < bodies.length * 4; attempt++) {
     const current = route.at(-1);
     if (current.every(offset => offset === 0)) return route;
+    const state = bodies.map(body => `${body.x},${body.y},${parked.has(body)}`).join("|");
+    // A parked letter can go home and recreate the same blockage. Try another strategy immediately.
+    if (visited.has(state)) return null;
+    visited.add(state);
     if (canSlideFormation(start, current, origin, glyphsOverlap, bounds)) return [...route, origin];
 
     const remaining = bodies.filter(body => !atHome(body));
@@ -214,10 +219,38 @@ export function planLetterRoutes(input, bounds) {
     ...body,
     home: { x: body.bounds.left - body.letter.x, y: body.bounds.top - body.letter.y },
   }));
-  for (const [order, evacuate] of [[1, false], [1, true], [-1, false]]) {
+  const verified = route => route?.every((point, index) => index === 0 ||
+    canSlideFormation(bodies, route[index - 1], point, glyphsOverlap, bounds));
+  const direct = planFrom(bodies, bounds, 1);
+  if (verified(direct)) return direct;
+
+  // Some typographic gaps are too narrow to enter after both neighbors have arrived.
+  // Route to a looser formation first, then close the gaps as a group.
+  const centerX = (Math.min(...bodies.map(body => body.home.x)) +
+    Math.max(...bodies.map(body => body.home.x + body.bounds.width))) / 2;
+  const centerY = (Math.min(...bodies.map(body => body.home.y)) +
+    Math.max(...bodies.map(body => body.home.y + body.bounds.height))) / 2;
+  const origin = new Float64Array(bodies.length * 2);
+  for (const spacing of [0.35, 0.65]) {
+    const staging = bodies.map(body => ({
+      ...body,
+      home: fit({
+        x: body.home.x + (body.home.x + body.bounds.width / 2 - centerX) * spacing,
+        y: body.home.y + (body.home.y + body.bounds.height / 2 - centerY) * spacing,
+      }, body, bounds),
+    }));
+    const offsets = Float64Array.from(staging.flatMap(({ home }, i) =>
+      [home.x - bodies[i].home.x, home.y - bodies[i].home.y]));
+    if (!canSlideFormation(bodies, offsets, origin, glyphsOverlap, bounds)) continue;
+    const route = planFrom(staging, bounds, 1);
+    if (!route) continue;
+    const closing = [...route.map(point => point.map((offset, i) => offset + offsets[i])), origin];
+    if (verified(closing)) return closing;
+  }
+
+  for (const [order, evacuate] of [[1, true], [-1, false]]) {
     const route = planFrom(bodies, bounds, order, evacuate);
-    if (route?.every((point, index) => index === 0 ||
-      canSlideFormation(bodies, route[index - 1], point, glyphsOverlap, bounds))) return route;
+    if (verified(route)) return route;
   }
   return null;
 }

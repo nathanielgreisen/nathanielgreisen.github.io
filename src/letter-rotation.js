@@ -3,6 +3,7 @@ import { traceGlyphOutline } from "./letter-wake.js";
 export function readGlyphMask(pixels, width, height, left, top) {
   const rows = [];
   let mass = 0, x = 0, y = 0, moment = 0;
+  let inkLeft = width, inkRight = 0, inkTop = height, inkBottom = 0;
   for (let row = 0; row < height; row++) {
     const runs = [];
     let start = -1;
@@ -18,6 +19,10 @@ export function readGlyphMask(pixels, width, height, left, top) {
         if (start < 0) start = col;
       } else if (start >= 0) {
         runs.push([start, col]);
+        inkLeft = Math.min(inkLeft, start);
+        inkRight = Math.max(inkRight, col);
+        inkTop = Math.min(inkTop, row);
+        inkBottom = row + 1;
         start = -1;
       }
     }
@@ -26,6 +31,7 @@ export function readGlyphMask(pixels, width, height, left, top) {
   const pivot = { x: mass ? x / mass : left + width / 2, y: mass ? y / mass : top + height / 2 };
   const inertia = Math.max(1, mass ? moment / mass - pivot.x ** 2 - pivot.y ** 2 : 1);
   return { left, top, width, height, rows, pivot, inertia,
+    ink: { left: left + inkLeft, right: left + inkRight, top: top + inkTop, bottom: top + inkBottom },
     outline: traceGlyphOutline(pixels, width, height) };
 }
 

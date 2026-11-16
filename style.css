@@ -88,6 +88,7 @@ body.forming-bubble {
 .home-intro {
   min-height: 65svh;
   align-content: center;
+  overflow: clip;
 }
 
 .home-intro h1 { font-size: clamp(53px, 8.4vw, 108px); line-height: .94; }

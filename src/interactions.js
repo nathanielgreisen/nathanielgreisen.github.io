@@ -1,7 +1,7 @@
 import { makeLetterWake, sampleLetterWake } from "./letter-wake.js";
 import { contactImpulse, spinFromFlick, wrapAngle } from "./letter-motion.js";
 import { createGlyphRotator, readGlyphMask } from "./letter-rotation.js";
-import { glyphContact, glyphsOverlap } from "./letter-navigation.js";
+import { blocks, glyphContact, glyphsOverlap } from "./letter-navigation.js";
 import { prepareLetterPlayback, sampleLetterRecovery } from "./letter-recovery.js";
 
 export function mountInteractions(container) {
@@ -326,6 +326,10 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
     draft = null;
     returnAt = null;
     aligning = false;
+    for (const letter of letters) {
+      letter.uprightWait = 0;
+      letter.uprightTarget = null;
+    }
     delete heading.dataset.returnPlan;
   }
 
@@ -450,6 +454,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       const { letter } = body;
       if (!aligning || !letter.angle) continue;
       body.uprighting = true;
+      if (makeRoomToStraighten(body, bodies, gridBounds, dt)) continue;
       const acceleration = 20;
       const remaining = Math.abs(letter.angle);
       const speed = Math.min(3.2, Math.sqrt(2 * acceleration * remaining), remaining / dt);
@@ -482,7 +487,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       }
       const speed = Math.hypot(letter.vx, letter.vy);
       if (speed) {
-        const remaining = Math.max(0, speed - (245 + speed * 0.15) * dt) / speed;
+        const remaining = Math.max(0, speed - (245 + speed * 0.25) * dt) / speed;
         letter.vx *= remaining;
         letter.vy *= remaining;
       }
@@ -596,8 +601,81 @@ function axisLimits(body, bounds, axis, rotated = Boolean(body.letter.angle)) {
   const min = bounds[edge];
   const max = bounds[opposite] - body.bounds[span];
   if (!rotated) return [min, max];
-  return [Math.max(min, min - body.mask[edge] - 1),
-    Math.min(max, bounds[opposite] - body.mask[edge] - body.mask[span] + 1)];
+  const { ink } = body.mask;
+  return [Math.max(min, min - (ink?.[edge] ?? body.mask[edge] + 1)),
+    Math.min(max, bounds[opposite] - (ink?.[opposite] ?? body.mask[edge] + body.mask[span] - 1))];
+}
+
+function fitsAt(body, bounds, rotated) {
+  return ["x", "y"].every(axis => {
+    const [min, max] = axisLimits(body, bounds, axis, rotated);
+    return body[axis] >= min - 0.01 && body[axis] <= max + 0.01;
+  });
+}
+
+function makeRoomToStraighten(body, bodies, bounds, dt) {
+  const { letter } = body;
+  if (!letter.uprightTarget && !(letter.uprightWait >= 0.12)) return false;
+  const others = bodies.filter(other => other !== body);
+  const canSlide = (moving, point) =>
+    fitsAt({ ...moving, ...point }, bounds, Boolean(moving.letter.angle)) &&
+    !bodies.some(other => other !== moving && blocks(moving, moving, point, other, glyphsOverlap));
+
+  if (!letter.uprightTarget) {
+    const steps = Math.ceil(Math.abs(letter.angle) * 90 / Math.PI);
+    const poses = Array.from({ length: steps + 1 }, (_, i) => {
+      const angle = letter.angle * (1 - i / steps);
+      return { ...body, mask: body.maskAt(angle), angle };
+    });
+    function findClearance(moving, clearsTurn) {
+      for (const distance of [3, 7, 14, 24, 40, 64, 96]) {
+        for (let direction = 0; direction < 16; direction++) {
+          const angle = direction * Math.PI / 8;
+          const point = { x: moving.x + Math.cos(angle) * distance, y: moving.y + Math.sin(angle) * distance };
+          if (clearsTurn(point) && canSlide(moving, point)) {
+            return { index: moving.letter.index, x: point.x - bounds.left, y: point.y - bounds.top };
+          }
+        }
+      }
+      return null;
+    }
+    const clearsTurn = (point, turn) => turn.every(pose => {
+      const shifted = { ...pose, ...point };
+      return fitsAt(shifted, bounds, Boolean(pose.angle)) && !others.some(other => glyphsOverlap(shifted, other));
+    });
+    const nextTurn = poses.slice(0, 12);
+    letter.uprightTarget = findClearance(body, point => clearsTurn(point, poses));
+    if (!letter.uprightTarget && nextTurn.length < poses.length) {
+      letter.uprightTarget = findClearance(body, point => clearsTurn(point, nextTurn));
+    }
+    // When the tilted glyph is boxed in, let a blocker yield before trying the turn again.
+    if (!letter.uprightTarget) {
+      for (const blocker of others) {
+        if (blocker.letter.uprightTarget || !nextTurn.some(pose => glyphsOverlap(pose, blocker))) continue;
+        letter.uprightTarget = findClearance(blocker, point =>
+          nextTurn.every(pose => !glyphsOverlap(pose, { ...blocker, ...point })));
+        if (letter.uprightTarget) break;
+      }
+    }
+
+    letter.uprightWait = 0;
+    if (!letter.uprightTarget) return false;
+  }
+
+  const moving = bodies[letter.uprightTarget.index];
+  const dx = bounds.left + letter.uprightTarget.x - moving.x;
+  const dy = bounds.top + letter.uprightTarget.y - moving.y;
+  const distance = Math.hypot(dx, dy);
+  const fraction = distance ? Math.min(1, 130 * dt / distance) : 1;
+  const next = { x: moving.x + dx * fraction, y: moving.y + dy * fraction };
+  if (!canSlide(moving, next)) {
+    letter.uprightTarget = null;
+    return false;
+  }
+  Object.assign(moving, next);
+  letter.omega = 0;
+  if (fraction === 1) letter.uprightTarget = null;
+  return true;
 }
 
 function rotateLetter(body, others, dt, bounds) {
@@ -608,10 +686,8 @@ function rotateLetter(body, others, dt, bounds) {
   if (body.uprighting && (Math.abs(next) < 0.006 || next * letter.angle < 0)) next = 0;
   const before = body.mask;
   const target = maskAt(next);
-  const fits = () => ["x", "y"].every(axis => {
-    const [min, max] = axisLimits(body, bounds, axis, Boolean(next));
-    return body[axis] >= min - 0.01 && body[axis] <= max + 0.01;
-  }) && !others.some(other => body !== other && glyphsOverlap(body, other));
+  const fits = () => fitsAt(body, bounds, Boolean(next)) &&
+    !others.some(other => body !== other && glyphsOverlap(body, other));
   body.mask = target;
   if (!fits()) {
     body.mask = before;
@@ -622,10 +698,13 @@ function rotateLetter(body, others, dt, bounds) {
         [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]]) {
         body.x = x + dx;
         body.y = y + dy;
-        if (others.some(other => body !== other && glyphsOverlap(body, other))) continue;
+        if (!fitsAt(body, bounds, true) || others.some(other => body !== other &&
+          blocks(body, { x, y }, body, other, glyphsOverlap))) continue;
         body.mask = target;
         if (fits()) {
           letter.angle = next;
+          if (target !== before || !next) letter.uprightWait = 0;
+          if (!next) letter.omega = 0;
           return;
         }
         body.mask = before;
@@ -633,12 +712,14 @@ function rotateLetter(body, others, dt, bounds) {
       body.x = x;
       body.y = y;
       letter.omega = 0;
+      letter.uprightWait = (letter.uprightWait ?? 0) + dt;
     } else {
       letter.omega = -omega * 0.28;
     }
     return;
   }
   letter.angle = next;
+  if (target !== before || !next) letter.uprightWait = 0;
   letter.omega = next || !body.uprighting ? omega : 0;
 }
 
