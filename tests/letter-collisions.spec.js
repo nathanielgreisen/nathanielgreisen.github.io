@@ -146,7 +146,17 @@ test("the planner clears and refills two tightly packed rows of 16 letters", () 
   const total = stretches.reduce((sum, step) => sum + step.distance, 0);
   const solo = stretches.filter(step => step.count === 1).reduce((sum, step) => sum + step.distance, 0);
   expect(solo / total).toBeLessThan(0.2);
-  expect(stretches.at(-1).count).toBeGreaterThanOrEqual(2);
+  expect(stretches.at(-1).count).toBeGreaterThanOrEqual(4);
+  const played = curveLetterRoute(route,
+    (from, to) => canSlideFormation(letters, from, to, glyphsOverlap, grid), () => 0.75);
+  const arrivalGroups = new Map();
+  for (const [index] of letters.entries()) {
+    const arrival = played.findLastIndex(pose =>
+      Math.hypot(pose[index * 2], pose[index * 2 + 1]) > 1e-7) + 1;
+    arrivalGroups.set(arrival, (arrivalGroups.get(arrival) ?? 0) + 1);
+  }
+  expect(arrivalGroups.get(played.length - 1)).toBeGreaterThanOrEqual(4);
+  expect([...arrivalGroups.values()].filter(count => count > 1).length).toBeGreaterThanOrEqual(4);
 });
 
 test("three independent returns move together and finish together", () => {

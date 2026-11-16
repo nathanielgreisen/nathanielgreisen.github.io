@@ -13,6 +13,13 @@ function checked(points, clear) {
 }
 
 export function curveLetterRoute(route, clear, random = Math.random) {
+  const home = route.at(-1);
+  const arrivals = new Uint8Array(route.length);
+  for (let axis = 0; axis < home.length; axis += 2) {
+    let i = route.length - 2;
+    while (i >= 0 && route[i][axis] === home[axis] && route[i][axis + 1] === home[axis + 1]) i--;
+    if (i >= 0) arrivals[i + 1]++;
+  }
   const rounded = [route[0]];
   for (let i = 1; i < route.length - 1; i++) {
     const before = route[i - 1];
@@ -21,7 +28,8 @@ export function curveLetterRoute(route, clear, random = Math.random) {
     const incoming = poseDistance(before, corner);
     const outgoing = poseDistance(corner, after);
     const cut = Math.min(15, incoming * 0.23, outgoing * 0.23);
-    if (cut < 2) {
+    // Keep the shared home pose as a waypoint so the whole group lands on it.
+    if (cut < 2 || arrivals[i] > 1) {
       rounded.push(corner);
       continue;
     }

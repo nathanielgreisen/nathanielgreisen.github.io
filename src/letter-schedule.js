@@ -30,6 +30,7 @@ function at(track, time) {
   const a = track[next - 1];
   const b = track[next];
   if (time <= a.time || a.time === b.time) return a;
+  if (time === b.time) return b;
   const t = (time - a.time) / (b.time - a.time);
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
 }
@@ -61,7 +62,7 @@ function timing(track) {
 function inWindow(track, info, start, end, keepPauses) {
   const points = [{ ...track[0], time: 0 }];
   const place = (point, fraction) => {
-    const time = start + (end - start) * fraction;
+    const time = fraction === 1 ? end : start + (end - start) * fraction;
     if (time !== points.at(-1).time || !samePoint(point, points.at(-1))) {
       points.push({ ...point, time });
     }
@@ -117,34 +118,48 @@ export function overlapLetterMoves(route, bodies, bounds) {
   }
 
   const samples = tracks.map(activity);
+  const arrivals = infos.map(info => info.last);
   const goal = Math.min(3, active.length);
   active.sort((a, b) => infos[a].last - infos[b].last);
   for (const index of active) {
     const info = infos[index];
     const others = samples[index].map((_, i) =>
       samples.reduce((sum, sample, j) => sum + (j === index ? 0 : sample[i]), 0));
-    let best = score(samples[index], others, goal);
+    const groups = new Map();
+    for (const peer of active) {
+      if (peer === index) continue;
+      const arrival = arrivals[peer];
+      groups.set(arrival, (groups.get(arrival) ?? 0) + 1);
+    }
+    // Reward shared arrivals as well as keeping several letters in motion.
+    const scoreArrival = end => 6 * Math.min(4, groups.get(end) ?? 0) + 2 * end;
+    let best = score(samples[index], others, goal) + scoreArrival(arrivals[index]);
     let chosen = tracks[index];
     let chosenSamples = samples[index];
+    let chosenEnd = arrivals[index];
     const starts = [...new Set([0, info.first / 2, info.first, 0.25, 0.5, 0.75])];
-    const ends = [...new Set([1, 0.9, 0.75, info.last])];
+    const groupTimes = [...groups.keys()].sort((a, b) =>
+      groups.get(b) - groups.get(a) || Math.abs(a - info.last) - Math.abs(b - info.last));
+    const ends = [...new Set([1, ...groupTimes.slice(0, 4), 0.9, 0.75, info.last])];
     for (const end of ends) {
       for (const start of starts) {
         if (end - start < 0.05) continue;
         for (const preserve of [false, true]) {
           const candidate = inWindow(tracks[index], info, start, end, preserve);
           const candidateSamples = activity(candidate);
-          const value = score(candidateSamples, others, goal);
+          const value = score(candidateSamples, others, goal) + scoreArrival(end);
           if (value <= best || !tracks.every((track, j) => j === index ||
             compatible(candidate, track, [bodies[index], bodies[j]], bounds))) continue;
           chosen = candidate;
           chosenSamples = candidateSamples;
+          chosenEnd = end;
           best = value;
         }
       }
     }
     tracks[index] = chosen;
     samples[index] = chosenSamples;
+    arrivals[index] = chosenEnd;
   }
   return toRoute(tracks);
 }
