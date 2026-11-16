@@ -23,12 +23,12 @@ function makeMap(context, radius) {
       const dx = (x + 0.5) * 2 / size - 1;
       const distance = Math.hypot(dx, dy);
       if (distance >= 1) continue;
-      // Sample toward the center to enlarge the ink, with the bend easing to zero at the rim.
-      const bend = 0.58 * radius * (1 - distance ** 2) ** 2 * 255 / displacementScale;
+      // Keep the magnification strong across the face before easing it out at the rim.
+      const bend = 0.94 * radius * (1 - distance ** 4) ** 2 * 255 / displacementScale;
       const offset = (y * size + x) * 4;
       image.data[offset] = 128 - dx * bend;
       image.data[offset + 1] = 128 - dy * bend;
-      image.data[offset + 3] = 255 * Math.min(1, (1 - distance) * 18);
+      image.data[offset + 3] = 255 * Math.min(1, (1 - distance) * 9);
     }
   }
   context.putImageData(image, 0, 0);
@@ -77,9 +77,15 @@ export function setupBubbleRefraction(heading) {
   function update(bubbles, scrollY) {
     if (!bubbles.length) return clear();
     const bounds = intro.getBoundingClientRect();
-    const candidates = bubbles.filter(({ x, y, radius }) =>
-      x + radius > bounds.left && x - radius < bounds.right &&
-      y + radius > bounds.top + scrollY && y - radius < bounds.bottom + scrollY);
+    const candidates = [];
+    for (const { x, y, radius } of bubbles) {
+      // Give quick-click bubbles enough room to visibly bend a stroke as they pass.
+      const lensRadius = radius + Math.max(5, 10 - radius * 0.1);
+      if (x + lensRadius > bounds.left && x - lensRadius < bounds.right &&
+          y + lensRadius > bounds.top + scrollY && y - lensRadius < bounds.bottom + scrollY) {
+        candidates.push({ x, y, radius: lensRadius });
+      }
+    }
     if (!candidates.length) return clear();
 
     const letters = glyphs.map(glyph => glyph.getBoundingClientRect());
@@ -115,7 +121,7 @@ export function setupBubbleRefraction(heading) {
         filter.insertBefore(images[i], lenses);
         lenses.append(svg("feMergeNode", { in: result }));
       }
-      // Reuse maps across nearby sizes. The lens boundary still uses the exact bubble radius.
+      // Reuse maps across nearby sizes while keeping the lens boundary exact.
       const size = Math.min(320, Math.round(radius / 4) * 4);
       if (!maps.has(size)) maps.set(size, makeMap(context, size));
       const url = maps.get(size);
