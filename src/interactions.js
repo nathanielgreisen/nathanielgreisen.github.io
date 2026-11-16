@@ -4,6 +4,7 @@ import { createGlyphRotator, readGlyphMask } from "./letter-rotation.js";
 import { blocks, glyphContact, glyphsOverlap } from "./letter-navigation.js";
 import { prepareLetterPlayback, sampleLetterRecovery } from "./letter-recovery.js";
 import { setupBubbleRefraction } from "./bubble-refraction.js";
+import { beginBubbleMerge, sampleBubbleMotion } from "./bubble-motion.js";
 
 export function mountInteractions(container) {
   const controller = new AbortController();
@@ -899,12 +900,12 @@ function setupBubbles(canvas, reducedMotion, updateEffects, signal) {
     return Math.min(limit, 8 + 34 * heldSeconds);
   }
 
-  function drawBubble(x, y, radius) {
-    context.globalAlpha = 0.35;
+  function drawBubble(x, y, radius, opacity = 1) {
+    context.globalAlpha = 0.35 * opacity;
     context.beginPath();
     context.arc(x, y, radius, 0, Math.PI * 2);
     context.stroke();
-    context.globalAlpha = 0.48;
+    context.globalAlpha = 0.48 * opacity;
     context.beginPath();
     context.arc(x, y, radius * 0.78, Math.PI * 1.08, Math.PI * 1.4);
     context.stroke();
@@ -940,13 +941,13 @@ function setupBubbles(canvas, reducedMotion, updateEffects, signal) {
 
     for (let i = 0; i < positions.length; i++) {
       const a = positions[i];
-      if (consumed.has(a.id)) continue;
+      if (a.tail || consumed.has(a.id)) continue;
       for (let j = i + 1; j < positions.length; j++) {
         const b = positions[j];
         const dx = a.x - b.x;
         const dy = a.y - b.y;
         const reach = a.radius + b.radius;
-        if (consumed.has(b.id) || dx * dx + dy * dy > reach * reach) continue;
+        if (b.tail || consumed.has(b.id) || dx * dx + dy * dy > reach * reach) continue;
 
         const radius = Math.hypot(a.radius, b.radius);
         const ambient = a.ambient && b.ambient;
@@ -961,16 +962,7 @@ function setupBubbles(canvas, reducedMotion, updateEffects, signal) {
 
         consumed.add(a.id);
         consumed.add(b.id);
-        merged.push({
-          id: nextBubbleId++,
-          ambient,
-          riseSpeed: (a.riseSpeed + b.riseSpeed) / 2,
-          x: (a.x + b.x) / 2,
-          y: (a.y + b.y) / 2,
-          radius,
-          drift: (a.drift + b.drift) / 2,
-          released: time
-        });
+        merged.push({ id: nextBubbleId++, ...beginBubbleMerge(a, b, time) });
         break;
       }
     }
@@ -978,7 +970,8 @@ function setupBubbles(canvas, reducedMotion, updateEffects, signal) {
     contacts = currentContacts;
     if (!merged.length) return positions;
     floatingBubbles = floatingBubbles.filter(bubble => !consumed.has(bubble.id)).concat(merged);
-    return positions.filter(bubble => !consumed.has(bubble.id)).concat(merged);
+    return positions.filter(bubble => !consumed.has(bubble.id))
+      .concat(merged.map(bubble => sampleBubbleMotion(bubble, time)));
   }
 
   function drawBubbles(time) {
@@ -996,28 +989,26 @@ function setupBubbles(canvas, reducedMotion, updateEffects, signal) {
 
     const positions = [];
     floatingBubbles = floatingBubbles.filter(bubble => {
-      const seconds = Math.max(0, time - bubble.released) / 1000;
-      const x = bubble.x + seconds * bubble.drift + Math.sin(seconds * 2.6) * 7;
-      const riseSpeed = bubble.riseSpeed ?? 62 + bubble.radius * 0.34;
-      const y = bubble.y - seconds * riseSpeed;
-      const r = bubble.radius;
+      const sample = sampleBubbleMotion(bubble, time);
+      const { x, y, radius: r } = sample;
+      if (bubble.merging && !sample.tail) delete bubble.merging;
       if (y - r <= viewportTop || x - r <= 0 || x + r >= width) {
         pops.push(makePop(x, Math.max(viewportTop + r, y), r, time));
         return false;
       }
-      positions.push({ id: bubble.id, x, y, radius: r, drift: bubble.drift,
-        ambient: bubble.ambient, riseSpeed });
+      positions.push({ ...sample, id: bubble.id, drift: bubble.drift,
+        ambient: bubble.ambient, age: Math.max(0, time - bubble.released) / 1000 });
       return true;
     });
 
     for (const bubble of mergeOverlaps(positions, time)) {
-      if (bubble.y - bubble.radius <= viewportTop) {
-        floatingBubbles = floatingBubbles.filter(({ id }) => id !== bubble.id);
-        pops.push(makePop(bubble.x, viewportTop + bubble.radius, bubble.radius, time));
-        continue;
-      }
       centers.push(bubble);
       if (bubble.y - bubble.radius < viewportBottom) drawBubble(bubble.x, bubble.y, bubble.radius);
+      if (bubble.tail) {
+        const { x, y, radius, opacity } = bubble.tail;
+        centers.push(bubble.tail);
+        if (y - radius < viewportBottom) drawBubble(x, y, radius, opacity);
+      }
     }
 
     pops = pops.filter(pop => {
