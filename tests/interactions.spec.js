@@ -491,6 +491,42 @@ for (const [side, width] of [["left", 1200], ["right", 390]]) {
   });
 }
 
+test("a passing bubble distorts letter ink without moving its hitbox", async ({ page }) => {
+  await page.addInitScript(() => { Math.random = () => 0.999; });
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("index.html");
+  await page.addStyleTag({ content: `
+    .name-letter-glyph { animation: none !important; }
+    .intro-grid, .page-bubbles { visibility: hidden; }
+  ` });
+  const letter = page.locator(".name-letter").last();
+  const home = await letter.boundingBox();
+  const clip = { x: Math.round(home.x), y: Math.round(home.y), width: 105, height: 94 };
+  const ink = () => page.screenshot({ clip });
+  const original = await ink();
+  const hitLetter = () => letter.evaluate(element => {
+    const box = element.getBoundingClientRect();
+    return element.contains(document.elementFromPoint(box.x + box.width * 0.68, box.y + box.height / 2));
+  });
+  expect(await hitLetter()).toBe(true);
+
+  await page.mouse.move(home.x + home.width * 0.68, home.y + home.height + 55);
+  await page.mouse.down();
+  await page.clock.runFor(1000);
+  await page.mouse.up();
+  await page.clock.runFor(1400);
+  await expect(page.locator("#name")).toHaveCSS("filter", /name-bubble-refraction/);
+  expect(await ink()).not.toEqual(original);
+  expect(await letter.boundingBox()).toEqual(home);
+  expect(await hitLetter()).toBe(true);
+
+  await page.clock.runFor(4000);
+  await expect(page.locator("#name")).toHaveCSS("filter", "none");
+  expect(await ink()).toEqual(original);
+});
+
 test("a held bubble grows, survives an interrupted release, and pops at the viewport top", async ({ page }) => {
   await page.addInitScript(() => {
     window.bubbleArcs = [];

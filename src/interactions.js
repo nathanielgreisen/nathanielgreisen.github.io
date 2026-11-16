@@ -3,6 +3,7 @@ import { contactImpulse, spinFromFlick, wrapAngle } from "./letter-motion.js";
 import { createGlyphRotator, readGlyphMask } from "./letter-rotation.js";
 import { blocks, glyphContact, glyphsOverlap } from "./letter-navigation.js";
 import { prepareLetterPlayback, sampleLetterRecovery } from "./letter-recovery.js";
+import { setupBubbleRefraction } from "./bubble-refraction.js";
 
 export function mountInteractions(container) {
   const controller = new AbortController();
@@ -12,7 +13,11 @@ export function mountInteractions(container) {
   const name = container.querySelector(".home-intro #name");
   const bubbleCanvas = container.querySelector(".page-bubbles");
   const disposeLetters = name && setupNameLetters(name, reducedMotion, grid?.updateLetters, signal);
-  const disposeBubbles = bubbleCanvas && setupBubbles(bubbleCanvas, reducedMotion, grid?.updateBubbles ?? (() => {}), signal);
+  const refraction = name && bubbleCanvas && setupBubbleRefraction(name);
+  const disposeBubbles = bubbleCanvas && setupBubbles(bubbleCanvas, reducedMotion, (bubbles, scrollY) => {
+    grid?.updateBubbles(bubbles);
+    refraction?.update(bubbles, scrollY);
+  }, signal);
 
   for (const row of container.querySelectorAll(".project-list summary")) {
     row.addEventListener("pointermove", event => {
@@ -27,6 +32,7 @@ export function mountInteractions(container) {
     grid?.dispose();
     disposeLetters && disposeLetters();
     disposeBubbles && disposeBubbles();
+    refraction?.dispose();
   };
 }
 
@@ -856,7 +862,7 @@ function moveLetterAxis(body, bodies, dt, axis, velocity, bounds, random) {
   if (next < min || next > max) letter[velocity] *= -0.35;
 }
 
-function setupBubbles(canvas, reducedMotion, updateGridBubbles, signal) {
+function setupBubbles(canvas, reducedMotion, updateEffects, signal) {
   const context = canvas.getContext("2d");
   if (!context) return;
   let width = 0;
@@ -867,16 +873,16 @@ function setupBubbles(canvas, reducedMotion, updateGridBubbles, signal) {
   let nextDrift = 0;
   let nextBubbleId = 0;
   let ambientTimer = 0;
-  const maxAmbientRadius = 11;
-  const maxAmbientMergeRadius = 12;
+  const maxAmbientRadius = 12;
+  const maxAmbientMergeRadius = 13;
   let contacts = new Map();
   let pops = [];
   const driftRates = [5, -17, 19, -5, 12, -12];
 
   function radiusAt(time) {
     const heldSeconds = Math.max(0, time - heldBubble.started) / 1000;
-    const limit = Math.min(width, document.documentElement.clientHeight) * 0.2;
-    return Math.min(limit, 7 + 31 * heldSeconds);
+    const limit = Math.min(width, document.documentElement.clientHeight) * 0.22;
+    return Math.min(limit, 8 + 34 * heldSeconds);
   }
 
   function drawBubble(x, y, radius) {
@@ -1010,7 +1016,7 @@ function setupBubbles(canvas, reducedMotion, updateGridBubbles, signal) {
       return true;
     });
     context.globalAlpha = 1;
-    updateGridBubbles(centers);
+    updateEffects(centers, viewportTop);
   }
 
   function resize() {
@@ -1044,7 +1050,7 @@ function setupBubbles(canvas, reducedMotion, updateGridBubbles, signal) {
       const height = document.documentElement.clientHeight;
       if (width > 32 && height > 32 && floatingBubbles.length < 48) {
         const maxRadius = Math.min(maxAmbientRadius, width * 0.2, height * 0.2);
-        const radius = 4 + (maxRadius - 4) * Math.random() ** 12;
+        const radius = 4.5 + (maxRadius - 4.5) * Math.random() ** 12;
         const inset = radius + 12;
         floatingBubbles.push({
           id: nextBubbleId++,
