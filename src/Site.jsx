@@ -25,7 +25,9 @@ function Footer() {
 
 function NameLetters({ children }) {
   return Array.from(children, (letter, index) => (
-    <span className="name-letter" aria-hidden="true" key={index}>{letter}</span>
+    <span className="name-letter" aria-hidden="true" key={index}>
+      <span className="name-letter-glyph">{letter}</span>
+    </span>
   ));
 }
 

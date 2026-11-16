@@ -101,22 +101,24 @@ body.forming-bubble {
   z-index: 1;
   cursor: grabbing;
 }
+/* Float the text inside its physics box so the drift does not steer the letter. */
+.name-letter-glyph { display: inline-block; }
 
 @media (prefers-reduced-motion: no-preference) {
-  #name:not(.letters-in-motion) .name-letter {
+  .name-letter-glyph {
     --drift-x: 4px;
     --drift-y: -3px;
     animation: letter-drift 14s ease-in-out infinite;
   }
 
-  #name:not(.letters-in-motion) .name-letter:nth-of-type(even) {
+  .name-letter:nth-of-type(even) .name-letter-glyph {
     --drift-x: -3px;
     --drift-y: 4px;
     animation-duration: 17s;
     animation-delay: 0.8s;
   }
 
-  #name:not(.letters-in-motion) .name-letter:nth-of-type(3n) {
+  .name-letter:nth-of-type(3n) .name-letter-glyph {
     --drift-x: 4.8px;
     --drift-y: 1.4px;
     animation-duration: 19s;

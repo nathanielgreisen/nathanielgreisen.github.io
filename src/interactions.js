@@ -235,8 +235,6 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
           if (moving !== letter) setLetterMotion(moving, moving.vx || moving.vy ? "coasting" : "idle");
         }
       }
-      // Keep the decorative offset out of pointer and collision measurements.
-      heading.classList.add("letters-in-motion");
       const bounds = element.getBoundingClientRect();
       drag = { letter, pointerId: event.pointerId,
         offsetX: event.clientX - bounds.left, offsetY: event.clientY - bounds.top,
@@ -383,7 +381,6 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
     } else {
       recovery = null;
       lastFrameTime = null;
-      heading.classList.remove("letters-in-motion");
     }
   }
 
@@ -395,7 +392,6 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       scheduleLetters();
       return;
     }
-    heading.classList.add("letters-in-motion");
     const gridBounds = grid.getBoundingClientRect();
     const font = getComputedStyle(heading);
     const canvasFont = `${font.fontStyle} ${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
@@ -463,7 +459,6 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
     } else {
       updateGridLetters?.([]);
       lastFrameTime = null;
-      heading.classList.remove("letters-in-motion");
       if (letters.some(letter => letter.x || letter.y)) {
         if (!draft) planReturn(bodies, gridBounds, time);
         if (time < returnAt) {
@@ -493,15 +488,12 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       }
       scheduleLetters();
     }
-    const moving = heading.classList.contains("letters-in-motion");
-    heading.classList.add("letters-in-motion");
     const gridBounds = grid.getBoundingClientRect();
     for (const letter of letters) {
       if (!letter.x && !letter.y) continue;
       const bounds = letter.element.getBoundingClientRect();
       placeLetter(letter, bounds.left, bounds.top, gridBounds, bounds);
     }
-    if (!moving) heading.classList.remove("letters-in-motion");
   });
   observer.observe(grid);
   return () => {
@@ -510,7 +502,6 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
     cancelAnimationFrame(letterFrame);
     clearTimeout(returnTimer);
     if (drag) drag.letter.element.classList.remove("is-dragging");
-    heading.classList.remove("letters-in-motion");
   };
 }
 

@@ -219,11 +219,12 @@ for (const width of [1200, 390]) {
   }
 }
 
-test("idle letters drift five pixels and return to their resting positions", async ({ page }) => {
+test("the five pixel drift continues through a grab without moving the physics box", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
   await page.goto("index.html");
   const letter = page.locator(".name-letter").first();
-  const samples = await letter.evaluate(async element => {
+  const glyph = letter.locator(".name-letter-glyph");
+  const samples = await glyph.evaluate(async element => {
     const animation = element.getAnimations()[0];
     const { duration } = animation.effect.getTiming();
     animation.pause();
@@ -246,11 +247,15 @@ test("idle letters drift five pixels and return to their resting positions", asy
   await page.mouse.move(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
   await page.mouse.down();
   await expect(letter).toHaveClass(/is-dragging/);
-  expect(await letter.evaluate(element => element.getAnimations().length)).toBe(0);
+  await glyph.evaluate(element => {
+    element.getAnimations()[0].currentTime = element.getAnimations()[0].effect.getTiming().duration / 4;
+  });
+  expect(await glyph.boundingBox()).toMatchObject(firstDrift);
+  expect(await letter.boundingBox()).toEqual(bounds);
   await page.mouse.up();
-  await expect.poll(() => letter.evaluate(element => element.getAnimations().length)).toBe(1);
+  expect(await glyph.evaluate(element => element.getAnimations().length)).toBe(1);
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await expect.poll(() => letter.evaluate(element => element.getAnimations().length)).toBe(0);
+  await expect.poll(() => glyph.evaluate(element => element.getAnimations().length)).toBe(0);
 });
 
 test("a dragged letter transfers momentum to other letters", async ({ page }) => {
