@@ -107,3 +107,27 @@ export function canSlideFormation(bodies, from, to, overlaps, bounds) {
   }
   return true;
 }
+
+export function glyphContact(a, b) {
+  const dx = Math.round(b.x + b.mask.left - a.x - a.mask.left);
+  const dy = Math.round(b.y + b.mask.top - a.y - a.mask.top);
+  if (dx >= a.mask.width || dx + b.mask.width <= 0) return null;
+  const bottom = Math.min(a.mask.height, dy + b.mask.height);
+  let ink = 0;
+  let x = 0;
+  let y = 0;
+  for (let row = Math.max(0, dy); row < bottom; row++) {
+    for (const [left, right] of a.mask.rows[row]) {
+      for (const [otherLeft, otherRight] of b.mask.rows[row - dy]) {
+        const start = Math.max(left, otherLeft + dx);
+        const end = Math.min(right, otherRight + dx);
+        if (end <= start) continue;
+        const count = end - start;
+        ink += count;
+        x += count * (start + end) / 2;
+        y += count * (row + 0.5);
+      }
+    }
+  }
+  return ink ? { x: a.x + a.mask.left + x / ink, y: a.y + a.mask.top + y / ink } : null;
+}

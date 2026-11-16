@@ -211,9 +211,13 @@ for (const width of [1200, 390]) {
       const disturbed = await positions();
       expect(disturbed.filter(([x, y], i) => Math.hypot(x - home[i][0], y - home[i][1]) > 1).length)
         .toBeGreaterThanOrEqual(3);
-      await page.clock.runFor(2800);
+      let elapsed = 0;
+      while (elapsed < 8000 && !await page.locator("#name").getAttribute("data-return-plan")) {
+        await page.clock.runFor(250);
+        elapsed += 250;
+      }
       await expect(page.locator("#name")).toHaveAttribute("data-return-plan", "ready");
-      await page.clock.runFor(11_700);
+      await page.clock.runFor(14_500 - elapsed);
       expect(await positions()).toEqual(home);
     });
   }
@@ -324,6 +328,56 @@ test("a flick between animation frames launches a letter at the pointer's speed"
   expect(slow).toBeGreaterThan(5);
   expect(fast).toBeGreaterThan(slow * 3);
   expect(releaseOnly).toBeGreaterThan(slow * 3);
+});
+
+test("an off-center flick spins a letter, which straightens before the home route", async ({ page }) => {
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("index.html");
+  const letter = page.locator(".name-letter").last();
+  const glyph = letter.locator(".name-letter-glyph");
+  const home = await letter.boundingBox();
+  const x = home.x + home.width / 2;
+  const y = home.y + home.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 300, y);
+  await page.clock.runFor(500);
+  await page.mouse.up();
+  await page.clock.runFor(20);
+
+  await letter.evaluate(element => {
+    const { x, y, width, height } = element.getBoundingClientRect();
+    const event = {
+      pointerId: 21, pointerType: "touch", isPrimary: true, button: 0,
+      clientX: x + width * 0.15, clientY: y + height * 0.3, bubbles: true,
+    };
+    element.setPointerCapture = () => {};
+    const down = new PointerEvent("pointerdown", { ...event, buttons: 1 });
+    const up = new PointerEvent("pointerup", { ...event, clientY: event.clientY + 18 });
+    Object.defineProperty(up, "timeStamp", { value: down.timeStamp + 40 });
+    element.dispatchEvent(down);
+    element.dispatchEvent(up);
+  });
+  await page.clock.runFor(120);
+  expect(await glyph.evaluate(element => parseFloat(element.style.rotate))).toBeLessThan(-0.05);
+
+  await page.clock.runFor(1600);
+  const restingAngle = await glyph.evaluate(element => element.style.rotate);
+  expect(restingAngle).not.toBe("");
+  await page.clock.runFor(700);
+  expect(await glyph.evaluate(element => element.style.rotate)).toBe(restingAngle);
+  await expect(page.locator("#name")).not.toHaveAttribute("data-return-plan");
+
+  for (let i = 0; i < 24 && !await page.locator("#name").getAttribute("data-return-plan"); i++) {
+    await page.clock.runFor(200);
+  }
+  await expect(page.locator("#name")).toHaveAttribute("data-return-plan", "ready");
+  expect(await glyph.evaluate(element => element.style.rotate)).toBe("");
+  expect((await letter.boundingBox()).x).toBeGreaterThan(home.x + 50);
+  await page.clock.runFor(8200);
+  expect(await letter.boundingBox()).toEqual(home);
 });
 
 test("a held bubble grows, survives an interrupted release, and pops at the viewport top", async ({ page }) => {

@@ -194,3 +194,15 @@ test("an aligned hit can knock a letter to either side while preserving momentum
     expect(flicked.letter.vx + idle.letter.vx).toBeCloseTo(300);
   }
 });
+
+test("downward hits produce opposite spin on opposite sides of the same letter", () => {
+  for (const side of [-1, 1]) {
+    const top = body(0, 45 + side * 5, 0, "flick");
+    top.y = 30;
+    top.letter.vy = 300;
+    const bottom = body(1, 45, 0);
+    stepLetterPhysics([top, bottom], bounds, 0.01, () => 0.5);
+    expect(Math.sign(bottom.letter.omega)).toBe(side);
+    expect(top.letter.vy + bottom.letter.vy).toBeCloseTo(300);
+  }
+});
