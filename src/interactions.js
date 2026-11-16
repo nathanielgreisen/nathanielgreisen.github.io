@@ -288,7 +288,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   let aligning = false;
   const maxLetterSpeed = 2400;
   const flickWindow = 60;
-  const returnDelay = 3000;
+  const returnDelay = 2200;
 
   function refreshMasks() {
     const font = getComputedStyle(heading);
@@ -522,13 +522,21 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       grabbed.letter.vy = dy / travelTime;
     }
 
-    if (!drag && returnAt !== null && time >= returnAt && letters.some(letter => letter.angle)) {
-      aligning = true;
+    if (!drag && !aligning && returnAt !== null && time >= returnAt) {
+      const turns = letters.filter(letter => letter.angle)
+        .map(letter => ({ letter, order: Math.random() }))
+        .sort((first, second) => first.order - second.order);
+      aligning = turns.length > 0;
+      let straightenAt = time;
+      for (const { letter } of turns) {
+        letter.straightenAt = straightenAt;
+        straightenAt += 20 + Math.random() * 14;
+      }
     }
-    // Leave settled letters tilted until the group is about to return.
+    // Stagger only the start of each turn, so the letters can straighten together.
     for (const body of bodies) {
       const { letter } = body;
-      if (!aligning || !letter.angle) continue;
+      if (!aligning || !letter.angle || time < letter.straightenAt) continue;
       body.uprighting = true;
       if (makeRoomToStraighten(body, bodies, gridBounds, dt)) continue;
       const acceleration = 20;

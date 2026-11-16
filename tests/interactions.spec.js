@@ -111,7 +111,7 @@ test("all letters wait for shared stillness and coast when regrouping is interru
   const secondRest = await second.boundingBox();
   expect(await first.boundingBox()).toEqual(firstRest);
   await page.mouse.up();
-  await page.clock.runFor(2900);
+  await page.clock.runFor(2100);
   await expect(page.locator("#name")).toHaveAttribute("data-return-plan", "ready");
   expect(await first.boundingBox()).toEqual(firstRest);
   expect(await second.boundingBox()).toEqual(secondRest);
@@ -386,42 +386,54 @@ test("a flick between animation frames launches a letter at the pointer's speed"
   expect(releaseOnly).toBeGreaterThan(slow * 3);
 });
 
-test("an off-center flick spins a letter, which straightens before the home route", async ({ page }) => {
+test("off-center flicks spin letters that straighten in staggered turns before moving home", async ({ page }) => {
   await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("index.html");
-  const letter = page.locator(".name-letter").last();
-  const glyph = letter.locator(".name-letter-glyph");
-  const home = await letter.boundingBox();
-  const x = home.x + home.width / 2;
-  const y = home.y + home.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.move(x + 300, y);
-  await page.clock.runFor(500);
-  await page.mouse.up();
-  await page.clock.runFor(20);
+  const letters = page.locator(".name-letter");
+  const pair = [letters.nth(8), letters.last()];
+  const homes = await Promise.all(pair.map(letter => letter.boundingBox()));
+  for (const [i, letter] of pair.entries()) {
+    const home = homes[i];
+    const x = home.x + home.width / 2;
+    const y = home.y + home.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + (i ? 560 : 220), y);
+    await page.clock.runFor(500);
+    await page.mouse.up();
+    await page.clock.runFor(20);
+  }
 
-  await quickFlick(letter, { offset: 0.15, dy: 18, ms: 40 });
+  const angles = () => Promise.all(pair.map(letter =>
+    letter.locator(".name-letter-glyph").evaluate(element => element.style.rotate)));
+  for (const letter of pair) await quickFlick(letter, { offset: 0.15, dy: 18, ms: 40 });
   await page.clock.runFor(120);
-  expect(await glyph.evaluate(element => parseFloat(element.style.rotate))).toBeLessThan(-0.05);
+  expect(parseFloat((await angles())[1])).toBeLessThan(-0.05);
 
   await page.clock.runFor(1600);
-  const restingAngle = await glyph.evaluate(element => element.style.rotate);
-  expect(restingAngle).not.toBe("");
+  const restingAngles = await angles();
+  expect(restingAngles.every(Boolean)).toBe(true);
   await page.clock.runFor(700);
-  expect(await glyph.evaluate(element => element.style.rotate)).toBe(restingAngle);
+  expect(await angles()).toEqual(restingAngles);
   await expect(page.locator("#name")).not.toHaveAttribute("data-return-plan");
+
+  let turning = 0;
+  for (let i = 0; i < 125 && !turning; i++) {
+    await page.clock.runFor(16);
+    turning = (await angles()).filter((angle, i) => angle !== restingAngles[i]).length;
+  }
+  expect(turning).toBe(1);
 
   for (let i = 0; i < 24 && !await page.locator("#name").getAttribute("data-return-plan"); i++) {
     await page.clock.runFor(200);
   }
   await expect(page.locator("#name")).toHaveAttribute("data-return-plan", "ready");
-  expect(await glyph.evaluate(element => element.style.rotate)).toBe("");
-  expect((await letter.boundingBox()).x).toBeGreaterThan(home.x + 50);
+  expect(await angles()).toEqual(["", ""]);
+  expect((await pair[1].boundingBox()).x).toBeGreaterThan(homes[1].x + 50);
   await page.clock.runFor(8200);
-  expect(await letter.boundingBox()).toEqual(home);
+  expect(await Promise.all(pair.map(letter => letter.boundingBox()))).toEqual(homes);
 });
 
 for (const [side, width] of [["left", 1200], ["right", 390]]) {
