@@ -1,13 +1,21 @@
 export function glyphsOverlap(a, b) {
-  const dx = Math.round(b.x + b.mask.left - a.x - a.mask.left);
-  const dy = Math.round(b.y + b.mask.top - a.y - a.mask.top);
-  if (dx >= a.mask.width || dx + b.mask.width <= 0) return false;
-  const bottom = Math.min(a.mask.height, dy + b.mask.height);
+  const first = a.mask;
+  const second = b.mask;
+  const x = b.x + second.left - a.x - first.left;
+  if (x >= first.width - 0.5 || x < 0.5 - second.width) return false;
+  const yOffset = b.y + second.top - a.y - first.top;
+  if (yOffset >= first.height - 0.5 || yOffset < 0.5 - second.height) return false;
+  const dx = Math.round(x);
+  const dy = Math.round(yOffset);
+  const bottom = Math.min(first.height, dy + second.height);
   for (let y = Math.max(0, dy); y < bottom; y++) {
-    for (const [left, right] of a.mask.rows[y]) {
-      for (const [otherLeft, otherRight] of b.mask.rows[y - dy]) {
-        if (left < otherRight + dx && right > otherLeft + dx) return true;
-      }
+    const row = first.rows[y];
+    const otherRow = second.rows[y - dy];
+    let i = 0, j = 0;
+    while (i < row.length && j < otherRow.length) {
+      if (row[i][1] <= otherRow[j][0] + dx) i++;
+      else if (otherRow[j][1] + dx <= row[i][0]) j++;
+      else return true;
     }
   }
   return false;

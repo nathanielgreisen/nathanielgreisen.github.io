@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { makeLetterWake, sampleLetterWake, traceGlyphOutline } from "../src/letter-wake.js";
+import { makeLetterWake, sampleLetterWake } from "../src/letter-wake.js";
+import { readGlyphMask } from "../src/letter-rotation.js";
 
 function glyph(withFoot) {
   const width = 60;
@@ -10,7 +11,7 @@ function glyph(withFoot) {
       if (x < 6 || (withFoot && y >= 43)) pixels[(y * width + x) * 4 + 3] = 255;
     }
   }
-  return { width, height, left: 0, top: 0, outline: traceGlyphOutline(pixels, width, height) };
+  return readGlyphMask(pixels, width, height, 0, 0);
 }
 
 function movingWake(mask, vx) {

@@ -34,11 +34,15 @@ function setupGrid(canvas, reducedMotion, signal) {
   const intro = canvas.parentElement;
   const context = canvas.getContext("2d");
   if (!context) return;
+  const base = document.createElement("canvas");
+  const baseContext = base.getContext("2d");
   const pointer = { x: 0, y: 0, inside: false };
   const bend = { x: 0, y: 0, strength: 0 };
   let width = 0;
   let height = 0;
+  let scale = 1;
   let frame = 0;
+  let lastRegion = null;
 
   let liveBubbles = [];
   let gridHasBubbles = false;
@@ -60,7 +64,8 @@ function setupGrid(canvas, reducedMotion, signal) {
   function warpPoint(x, y, fields, wakes) {
     const dx = x - bend.x;
     const dy = y - bend.y;
-    const cursorForce = Math.max(0, 1 - Math.hypot(dx, dy) / 110) ** 2 * bend.strength;
+    const cursorForce = bend.strength && Math.abs(dx) < 110 && Math.abs(dy) < 110
+      ? Math.max(0, 1 - Math.sqrt(dx * dx + dy * dy) / 110) ** 2 * bend.strength : 0;
     let shiftX = dx * cursorForce;
     let shiftY = dy * cursorForce;
     let bubbleHighlight = 0;
@@ -70,7 +75,7 @@ function setupGrid(canvas, reducedMotion, signal) {
       const bx = x - field.x;
       const by = y - field.y;
       if (Math.abs(bx) >= field.reach || Math.abs(by) >= field.reach) continue;
-      const falloff = Math.max(0, 1 - Math.hypot(bx, by) / field.reach);
+      const falloff = Math.max(0, 1 - Math.sqrt(bx * bx + by * by) / field.reach);
       const force = falloff ** 2 * 1.5;
       shiftX += bx * force;
       shiftY += by * force;
@@ -85,42 +90,93 @@ function setupGrid(canvas, reducedMotion, signal) {
       letterHighlight = Math.max(letterHighlight, sample.force);
     }
 
-    const shift = Math.hypot(shiftX, shiftY);
-    const scale = shift > 42 ? 42 / shift : 1;
+    const shiftSquared = shiftX * shiftX + shiftY * shiftY;
+    const scale = shiftSquared > 42 ** 2 ? 42 / Math.sqrt(shiftSquared) : 1;
     return { x: x + shiftX * scale, y: y + shiftY * scale, cursorForce, bubbleHighlight, letterHighlight };
   }
 
-  function draw() {
-    context.clearRect(0, 0, width, height);
-    const fields = localFields();
-    gridHasBubbles = fields.length > 0;
+  function paint(target, region, fields = [], wakes = [], cursor = false) {
     const spacing = 24;
     for (const vertical of [false, true]) {
       const limit = vertical ? width : height;
       const length = vertical ? height : width;
-      for (let fixed = 0.5; fixed < limit; fixed += spacing) {
+      const fixedStart = vertical ? region.left : region.top;
+      const fixedEnd = vertical ? region.right : region.bottom;
+      const lineStart = vertical ? region.top : region.left;
+      const lineEnd = vertical ? region.bottom : region.right;
+      const firstFixed = Math.max(0, Math.ceil((fixedStart - 0.5) / spacing)) * spacing + 0.5;
+      const firstOffset = Math.max(0, Math.floor(lineStart / 8) * 8);
+      for (let fixed = firstFixed; fixed < limit && fixed <= fixedEnd; fixed += spacing) {
         const lineFields = fields.filter(field =>
           Math.abs(fixed - (vertical ? field.x : field.y)) < field.reach);
-        const lineWakes = letterWakes.filter(wake =>
+        const lineWakes = wakes.filter(wake =>
           vertical ? fixed >= wake.left && fixed <= wake.right : fixed >= wake.top && fixed <= wake.bottom);
-        const pointAt = offset => warpPoint(vertical ? fixed : offset,
-          vertical ? offset : fixed, lineFields, lineWakes);
-        let start = pointAt(0);
-        for (let offset = 0; offset < length; offset += 8) {
+        const warped = lineFields.length || lineWakes.length ||
+          (cursor && Math.abs(fixed - (vertical ? bend.x : bend.y)) < 110);
+        const pointAt = offset => {
+          const x = vertical ? fixed : offset;
+          const y = vertical ? offset : fixed;
+          return warped ? warpPoint(x, y, lineFields, lineWakes) :
+            { x, y, cursorForce: 0, bubbleHighlight: 0, letterHighlight: 0 };
+        };
+        let start = pointAt(firstOffset);
+        for (let offset = firstOffset; offset < length && offset <= lineEnd; offset += 8) {
           const end = pointAt(Math.min(offset + 8, length));
           const x = vertical ? fixed : offset;
           const xWeight = Math.max(0, (x - width * 0.2) / Math.max(1, width * 0.8));
-          context.globalAlpha = 0.025 + 0.11 * xWeight +
+          target.globalAlpha = 0.025 + 0.11 * xWeight +
             0.33 * start.cursorForce + 0.24 * start.bubbleHighlight + 0.32 * start.letterHighlight;
-          context.beginPath();
-          context.moveTo(start.x, start.y);
-          context.lineTo(end.x, end.y);
-          context.stroke();
+          target.beginPath();
+          target.moveTo(start.x, start.y);
+          target.lineTo(end.x, end.y);
+          target.stroke();
           start = end;
         }
       }
     }
-    context.globalAlpha = 1;
+    target.globalAlpha = 1;
+  }
+
+  function draw() {
+    const fields = localFields();
+    gridHasBubbles = fields.length > 0;
+    if (lastRegion) {
+      const { x, y, w, h } = lastRegion;
+      context.clearRect(x / scale, y / scale, w / scale, h / scale);
+      context.drawImage(base, x, y, w, h, x / scale, y / scale, w / scale, h / scale);
+      lastRegion = null;
+    }
+    if (!fields.length && !letterWakes.length && !bend.strength) return;
+
+    let left = width, top = height, right = 0, bottom = 0;
+    function include(l, t, r, b) {
+      left = Math.min(left, l);
+      top = Math.min(top, t);
+      right = Math.max(right, r);
+      bottom = Math.max(bottom, b);
+    }
+    for (const { x, y, reach } of fields) include(x - reach, y - reach, x + reach, y + reach);
+    for (const wake of letterWakes) include(wake.left, wake.top, wake.right, wake.bottom);
+    if (bend.strength) include(bend.x - 110, bend.y - 110, bend.x + 110, bend.y + 110);
+
+    // Include the maximum displacement and the segment adjoining each end.
+    const padding = 52;
+    const x = Math.max(0, Math.floor((left - padding) * scale));
+    const y = Math.max(0, Math.floor((top - padding) * scale));
+    const w = Math.min(canvas.width, Math.ceil((right + padding) * scale)) - x;
+    const h = Math.min(canvas.height, Math.ceil((bottom + padding) * scale)) - y;
+    if (w <= 0 || h <= 0) return;
+    lastRegion = { x, y, w, h };
+    context.clearRect(x / scale, y / scale, w / scale, h / scale);
+    context.save();
+    context.beginPath();
+    context.rect(x / scale, y / scale, w / scale, h / scale);
+    context.clip();
+    paint(context, {
+      left: x / scale - 1, top: y / scale - 1,
+      right: (x + w) / scale + 1, bottom: (y + h) / scale + 1,
+    }, fields, letterWakes, !!bend.strength);
+    context.restore();
   }
 
   function updateBubbles(bubbles) {
@@ -135,13 +191,22 @@ function setupGrid(canvas, reducedMotion, signal) {
 
   function resize() {
     const bounds = canvas.getBoundingClientRect();
+    const pixelRatio = window.devicePixelRatio || 1;
+    if (width === bounds.width && height === bounds.height && scale === pixelRatio) return;
     width = bounds.width;
     height = bounds.height;
-    const scale = window.devicePixelRatio || 1;
+    scale = pixelRatio;
     canvas.width = Math.round(width * scale);
     canvas.height = Math.round(height * scale);
+    base.width = canvas.width;
+    base.height = canvas.height;
+    baseContext.setTransform(scale, 0, 0, scale, 0, 0);
+    baseContext.strokeStyle = "#aaa";
+    paint(baseContext, { left: 0, top: 0, right: width, bottom: height });
     context.setTransform(scale, 0, 0, scale, 0, 0);
     context.strokeStyle = "#aaa";
+    lastRegion = null;
+    if (width && height) context.drawImage(base, 0, 0, base.width / scale, base.height / scale);
     draw();
   }
 
@@ -208,12 +273,11 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   const grid = heading.closest(".home-intro");
   const letters = Array.from(heading.querySelectorAll(".name-letter"), (element, index) => ({
     element, glyph: element.firstElementChild, index, x: 0, y: 0, vx: 0, vy: 0, angle: 0, omega: 0, motionReason: "idle",
+    text: element.textContent, renderedAngle: 0,
   }));
   const maskContext = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
-  const spinContext = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
-  const masks = new Map();
+  const rotationContext = document.createElement("canvas").getContext("2d", { willReadFrequently: true });
   let maskStyle = "";
-  let baseline = 0;
   let drag = null;
   let letterFrame = 0;
   let returnTimer = 0;
@@ -225,6 +289,34 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   const maxLetterSpeed = 2400;
   const flickWindow = 60;
   const returnDelay = 3000;
+
+  function refreshMasks() {
+    const font = getComputedStyle(heading);
+    const canvasFont = `${font.fontStyle} ${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
+    const style = canvasFont + font.lineHeight;
+    if (style === maskStyle) return;
+    const probe = document.createElement("span");
+    probe.style.display = "inline-block";
+    const first = letters[0].element;
+    first.append(probe);
+    const baseline = probe.getBoundingClientRect().bottom - first.getBoundingClientRect().top;
+    probe.remove();
+    const glyphs = new Set(letters.map(letter => letter.text));
+    const masks = measureGlyphs(maskContext, rotationContext, canvasFont, glyphs, baseline);
+    for (const letter of letters) {
+      const { mask, maskAt } = masks.get(letter.text);
+      letter.maskAt = maskAt;
+      letter.pivot = mask.pivot;
+      letter.inertia = mask.inertia;
+      // The farthest ink corner bounds how far any stroke can move while spinning.
+      letter.spinRadius = Math.hypot(
+        Math.max(mask.pivot.x - mask.ink.left, mask.ink.right - mask.pivot.x),
+        Math.max(mask.pivot.y - mask.ink.top, mask.ink.bottom - mask.pivot.y)
+      ) + 1;
+      letter.glyph.style.transformOrigin = `${mask.pivot.x}px ${mask.pivot.y}px`;
+    }
+    maskStyle = style;
+  }
 
   for (const letter of letters) {
     const { element } = letter;
@@ -405,28 +497,12 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       return;
     }
     const gridBounds = grid.getBoundingClientRect();
-    const font = getComputedStyle(heading);
-    const canvasFont = `${font.fontStyle} ${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
-    const style = canvasFont + font.lineHeight;
-    if (style !== maskStyle) {
-      masks.clear();
-      const probe = document.createElement("span");
-      probe.style.display = "inline-block";
-      const first = letters[0].element;
-      first.append(probe);
-      baseline = probe.getBoundingClientRect().bottom - first.getBoundingClientRect().top;
-      probe.remove();
-      maskStyle = style;
-    }
+    if (!maskStyle) refreshMasks();
 
     const bodies = letters.map(letter => {
       const bounds = letter.element.getBoundingClientRect();
-      const glyph = letter.element.textContent;
-      if (!masks.has(glyph)) masks.set(glyph, measureGlyph(maskContext, spinContext, canvasFont, glyph, baseline));
-      const { mask, maskAt } = masks.get(glyph);
-      letter.pivot = mask.pivot;
-      letter.inertia = mask.inertia;
-      return { letter, bounds, mask: maskAt(letter.angle), maskAt, pivot: mask.pivot, inertia: mask.inertia,
+      const { maskAt, pivot, inertia } = letter;
+      return { letter, bounds, mask: maskAt(letter.angle), maskAt, pivot, inertia,
         x: bounds.left, y: bounds.top };
     });
     if (recovery || (!drag && draft?.route && time >= returnAt)) {
@@ -474,11 +550,10 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
           if (wake) wakes.push(wake);
         }
       }
-      if (letter.angle) {
-        letter.glyph.style.transformOrigin = `${body.pivot.x}px ${body.pivot.y}px`;
-        letter.glyph.style.rotate = `${letter.angle}rad`;
-      } else {
-        letter.glyph.style.removeProperty("rotate");
+      if (letter.angle !== letter.renderedAngle) {
+        if (letter.angle) letter.glyph.style.rotate = `${letter.angle}rad`;
+        else letter.glyph.style.removeProperty("rotate");
+        letter.renderedAngle = letter.angle;
       }
       if (body === grabbed) continue;
       if (!body.uprighting) {
@@ -524,6 +599,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   }
 
   const observer = new ResizeObserver(() => {
+    refreshMasks();
     if (recovery || draft || aligning) {
       recovery = null;
       cancelPlan();
@@ -541,6 +617,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
     }
   });
   observer.observe(grid);
+  observer.observe(heading);
   return () => {
     observer.disconnect();
     cancelPlan();
@@ -550,24 +627,34 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
   };
 }
 
-function measureGlyph(context, spinContext, font, glyph, baseline) {
+function measureGlyphs(context, rotationContext, font, glyphs, baseline) {
   context.font = font;
-  const metrics = context.measureText(glyph);
-  const left = Math.floor(-metrics.actualBoundingBoxLeft) - 1;
-  const top = Math.floor(-metrics.actualBoundingBoxAscent) - 1;
-  const width = Math.ceil(metrics.actualBoundingBoxRight) - left + 1;
-  const height = Math.ceil(metrics.actualBoundingBoxDescent) - top + 1;
-  context.canvas.width = width;
-  context.canvas.height = height;
+  let sheetWidth = 0;
+  const entries = Array.from(glyphs, glyph => {
+    const metrics = context.measureText(glyph);
+    const left = Math.floor(-metrics.actualBoundingBoxLeft) - 1;
+    const top = Math.floor(-metrics.actualBoundingBoxAscent) - 1;
+    const width = Math.ceil(metrics.actualBoundingBoxRight) - left + 1;
+    const height = Math.ceil(metrics.actualBoundingBoxDescent) - top + 1;
+    const x = sheetWidth;
+    sheetWidth += width;
+    return { glyph, x, left, top, width, height };
+  });
+  const sheetHeight = Math.max(...entries.map(entry => entry.height));
+  context.canvas.width = sheetWidth;
+  context.canvas.height = sheetHeight;
   context.font = font;
-  context.fillText(glyph, -left, -top);
-  const pixels = context.getImageData(0, 0, width, height).data;
-  const mask = readGlyphMask(pixels, width, height, left, top + baseline);
-  const source = document.createElement("canvas");
-  source.width = width;
-  source.height = height;
-  source.getContext("2d").drawImage(context.canvas, 0, 0);
-  return { mask, maskAt: createGlyphRotator(mask, source, spinContext) };
+  for (const { glyph, x, left, top } of entries) context.fillText(glyph, x - left, -top);
+  const sheet = context.getImageData(0, 0, sheetWidth, sheetHeight).data;
+  return new Map(entries.map(({ glyph, x, left, top, width, height }) => {
+    const pixels = new Uint8ClampedArray(width * height * 4);
+    for (let y = 0; y < height; y++) {
+      const start = (y * sheetWidth + x) * 4;
+      pixels.set(sheet.subarray(start, start + width * 4), y * width * 4);
+    }
+    const mask = readGlyphMask(pixels, width, height, left, top + baseline);
+    return [glyph, { mask, maskAt: createGlyphRotator(mask, pixels, rotationContext) }];
+  }));
 }
 
 function setLetterMotion(letter, reason) {
@@ -578,9 +665,13 @@ function setLetterMotion(letter, reason) {
 }
 
 export function stepLetterPhysics(bodies, bounds, dt, random = Math.random) {
-  const fastest = Math.max(...bodies.map(({ letter, bounds }) =>
-    Math.hypot(letter.vx, letter.vy) + Math.min(12, Math.abs(letter.omega ?? 0)) *
-      Math.max(bounds.width, bounds.height)));
+  let fastest = 0;
+  for (const { letter, bounds } of bodies) {
+    const spin = Math.min(12, Math.abs(letter.omega ?? 0));
+    const radius = letter.spinRadius ?? Math.max(bounds.width, bounds.height);
+    fastest = Math.max(fastest, Math.hypot(letter.vx, letter.vy) + spin * radius);
+  }
+  if (!fastest) return;
   // Subdivide motion so thin glyph strokes can't pass through each other.
   const steps = Math.max(1, Math.ceil(fastest * dt * 2));
   const step = dt / steps;
@@ -689,7 +780,7 @@ function rotateLetter(body, others, dt, bounds) {
   const fits = () => fitsAt(body, bounds, Boolean(next)) &&
     !others.some(other => body !== other && glyphsOverlap(body, other));
   body.mask = target;
-  if (!fits()) {
+  if (target !== before && !fits()) {
     body.mask = before;
     if (body.uprighting) {
       const x = body.x;
@@ -732,6 +823,10 @@ function moveLetterAxis(body, bodies, dt, axis, velocity, bounds, random) {
   const previous = body[axis];
   const next = previous + speed * dt;
   body[axis] = Math.max(min, Math.min(max, next));
+  if (body[axis] === previous) {
+    if (next < min || next > max) letter[velocity] *= -0.35;
+    return;
+  }
 
   for (const other of bodies) {
     if (other === body || !glyphsOverlap(body, other)) continue;
