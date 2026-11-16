@@ -40,6 +40,6 @@ test("letter wakes grow with speed and taper behind the direction of movement", 
 test("the wake follows the glyph's strokes, including a foot outside the main stem", () => {
   const stem = movingWake(glyph(false), -900);
   const bent = movingWake(glyph(true), -900);
-  expect(sampleLetterWake(209, 155, stem)).toBeNull();
-  expect(sampleLetterWake(209, 155, bent).force).toBeGreaterThan(0);
+  expect(sampleLetterWake(240, 155, stem)).toBeNull();
+  expect(sampleLetterWake(240, 155, bent).force).toBeGreaterThan(0);
 });

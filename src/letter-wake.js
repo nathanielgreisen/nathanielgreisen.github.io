@@ -24,8 +24,8 @@ export function makeLetterWake(body, gridBounds, dt) {
   const strength = Math.min(1, Math.max(0, (speed - 12) / 950));
   if (!strength) return null;
 
-  const reach = 9 + strength * 17;
-  const trail = 8 + strength * 94;
+  const reach = 13 + strength * 23;
+  const trail = 12 + strength * 125;
   const ux = -vx / speed;
   const uy = -vy / speed;
   const x = body.x - gridBounds.left + body.mask.left;

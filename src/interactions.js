@@ -605,8 +605,8 @@ function setupBubbles(canvas, reducedMotion, updateGridBubbles, signal) {
   let nextDrift = 0;
   let nextBubbleId = 0;
   let ambientTimer = 0;
-  const maxAmbientRadius = 8;
-  const maxAmbientMergeRadius = 10;
+  const maxAmbientRadius = 11;
+  const maxAmbientMergeRadius = 12;
   let contacts = new Map();
   let pops = [];
   const driftRates = [5, -17, 19, -5, 12, -12];
@@ -782,7 +782,7 @@ function setupBubbles(canvas, reducedMotion, updateGridBubbles, signal) {
       const height = document.documentElement.clientHeight;
       if (width > 32 && height > 32 && floatingBubbles.length < 48) {
         const maxRadius = Math.min(maxAmbientRadius, width * 0.2, height * 0.2);
-        const radius = 4 + (maxRadius - 4) * Math.random() ** 8;
+        const radius = 4 + (maxRadius - 4) * Math.random() ** 12;
         const inset = radius + 12;
         floatingBubbles.push({
           id: nextBubbleId++,
