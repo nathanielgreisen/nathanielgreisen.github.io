@@ -15,7 +15,7 @@ export function mountInteractions(container) {
   const disposeLetters = name && setupNameLetters(name, reducedMotion, grid?.updateLetters, signal);
   const refraction = name && bubbleCanvas && setupBubbleRefraction(name);
   const disposeBubbles = bubbleCanvas && setupBubbles(bubbleCanvas, reducedMotion, (bubbles, scrollY) => {
-    grid?.updateBubbles(bubbles);
+    grid?.updateBubbles(bubbles, scrollY);
     refraction?.update(bubbles, scrollY);
   }, signal);
 
@@ -51,20 +51,23 @@ function setupGrid(canvas, reducedMotion, signal) {
   let lastRegion = null;
 
   let liveBubbles = [];
+  let bubbleFields = [];
   let gridHasBubbles = false;
   let letterWakes = [];
 
-  function localFields() {
+  function localFields(scrollY) {
     if (!liveBubbles.length) return [];
     const bounds = canvas.getBoundingClientRect();
-    const pageTop = bounds.top + window.scrollY;
-    return liveBubbles.flatMap(bubble => {
+    const pageTop = bounds.top + scrollY;
+    const fields = [];
+    for (const bubble of liveBubbles) {
       const reach = bubble.radius * 2.3;
       const x = bubble.x - bounds.left;
       const y = bubble.y - pageTop;
-      if (x + reach < 0 || x - reach > width || y + reach < 0 || y - reach > height) return [];
-      return [{ x, y, reach }];
-    });
+      if (x + reach < 0 || x - reach > width || y + reach < 0 || y - reach > height) continue;
+      fields.push({ x, y, reach });
+    }
+    return fields;
   }
 
   function warpPoint(x, y, fields, wakes) {
@@ -119,6 +122,14 @@ function setupGrid(canvas, reducedMotion, signal) {
           vertical ? fixed >= wake.left && fixed <= wake.right : fixed >= wake.top && fixed <= wake.bottom);
         const warped = lineFields.length || lineWakes.length ||
           (cursor && Math.abs(fixed - (vertical ? bend.x : bend.y)) < 110);
+        if (vertical && !warped) {
+          target.globalAlpha = 0.025 + 0.11 * Math.max(0, (fixed - width * 0.2) / Math.max(1, width * 0.8));
+          target.beginPath();
+          target.moveTo(fixed, firstOffset);
+          target.lineTo(fixed, Math.min(length, lineEnd + 8));
+          target.stroke();
+          continue;
+        }
         const pointAt = offset => {
           const x = vertical ? fixed : offset;
           const y = vertical ? offset : fixed;
@@ -144,7 +155,7 @@ function setupGrid(canvas, reducedMotion, signal) {
   }
 
   function draw() {
-    const fields = localFields();
+    const fields = bubbleFields;
     gridHasBubbles = fields.length > 0;
     if (lastRegion) {
       const { x, y, w, h } = lastRegion;
@@ -185,9 +196,10 @@ function setupGrid(canvas, reducedMotion, signal) {
     context.restore();
   }
 
-  function updateBubbles(bubbles) {
+  function updateBubbles(bubbles, scrollY) {
     liveBubbles = bubbles;
-    if (gridHasBubbles || localFields().length) schedule();
+    bubbleFields = localFields(scrollY);
+    if (gridHasBubbles || bubbleFields.length) schedule();
   }
 
   function updateLetters(wakes) {
@@ -213,6 +225,7 @@ function setupGrid(canvas, reducedMotion, signal) {
     context.strokeStyle = "#aaa";
     lastRegion = null;
     if (width && height) context.drawImage(base, 0, 0, base.width / scale, base.height / scale);
+    bubbleFields = localFields(window.scrollY);
     draw();
   }
 
@@ -866,7 +879,8 @@ function setupBubbles(canvas, reducedMotion, updateEffects, signal) {
   const context = canvas.getContext("2d");
   if (!context) return;
   let width = 0;
-  let pageHeight = 0;
+  let height = 0;
+  let scale = 1;
   let frame = 0;
   let heldBubble = null;
   let floatingBubbles = [];
@@ -929,8 +943,10 @@ function setupBubbles(canvas, reducedMotion, updateEffects, signal) {
       if (consumed.has(a.id)) continue;
       for (let j = i + 1; j < positions.length; j++) {
         const b = positions[j];
-        if (consumed.has(b.id) ||
-            Math.hypot(a.x - b.x, a.y - b.y) > a.radius + b.radius) continue;
+        const dx = a.x - b.x;
+        const dy = a.y - b.y;
+        const reach = a.radius + b.radius;
+        if (consumed.has(b.id) || dx * dx + dy * dy > reach * reach) continue;
 
         const radius = Math.hypot(a.radius, b.radius);
         const ambient = a.ambient && b.ambient;
@@ -967,6 +983,9 @@ function setupBubbles(canvas, reducedMotion, updateEffects, signal) {
 
   function drawBubbles(time) {
     const viewportTop = window.scrollY;
+    const viewportBottom = viewportTop + height;
+    context.setTransform(scale, 0, 0, scale, 0, -viewportTop * scale);
+    context.clearRect(0, viewportTop, width, height);
     const centers = [];
     if (heldBubble) {
       const radius = radiusAt(time);
@@ -998,21 +1017,24 @@ function setupBubbles(canvas, reducedMotion, updateEffects, signal) {
         continue;
       }
       centers.push(bubble);
-      drawBubble(bubble.x, bubble.y, bubble.radius);
+      if (bubble.y - bubble.radius < viewportBottom) drawBubble(bubble.x, bubble.y, bubble.radius);
     }
 
     pops = pops.filter(pop => {
       const progress = Math.max(0, time - pop.started) / 360;
       if (progress >= 1) return false;
       context.globalAlpha = 0.5 * (1 - progress);
+      context.beginPath();
       for (const particle of pop.particles) {
         const distance = particle.startDistance + progress * particle.travel;
         const drop = particle.downwardCurve * progress ** 2;
-        context.beginPath();
-        context.arc(pop.x + particle.dx * distance,
-          pop.y + particle.dy * distance + drop, 1.15, 0, Math.PI * 2);
-        context.fill();
+        const x = pop.x + particle.dx * distance;
+        const y = pop.y + particle.dy * distance + drop;
+        if (y + 1.15 < viewportTop || y - 1.15 > viewportBottom) continue;
+        context.moveTo(x + 1.15, y);
+        context.arc(x, y, 1.15, 0, Math.PI * 2);
       }
+      context.fill();
       return true;
     });
     context.globalAlpha = 1;
@@ -1021,12 +1043,13 @@ function setupBubbles(canvas, reducedMotion, updateEffects, signal) {
 
   function resize() {
     const bounds = canvas.getBoundingClientRect();
-    const scale = window.devicePixelRatio || 1;
+    const pixelRatio = window.devicePixelRatio || 1;
+    if (width === bounds.width && height === bounds.height && scale === pixelRatio) return;
+    scale = pixelRatio;
     width = bounds.width;
-    pageHeight = bounds.height;
+    height = bounds.height;
     canvas.width = Math.round(width * scale);
-    canvas.height = Math.round(pageHeight * scale);
-    context.setTransform(scale, 0, 0, scale, 0, 0);
+    canvas.height = Math.round(height * scale);
     context.strokeStyle = "#aaa";
     context.fillStyle = "#aaa";
     schedule();
@@ -1034,7 +1057,6 @@ function setupBubbles(canvas, reducedMotion, updateEffects, signal) {
 
   function animate(time) {
     frame = 0;
-    context.clearRect(0, 0, width, pageHeight);
     drawBubbles(time);
     if (heldBubble || floatingBubbles.length || pops.length) schedule();
   }

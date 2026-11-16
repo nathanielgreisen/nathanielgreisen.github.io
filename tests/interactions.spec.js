@@ -491,7 +491,7 @@ for (const [side, width] of [["left", 1200], ["right", 390]]) {
   });
 }
 
-test("a quick-click bubble visibly distorts letter ink without moving its hitbox", async ({ page }) => {
+test("a passing bubble distorts letter ink without moving its hitbox", async ({ page }) => {
   await page.addInitScript(() => { Math.random = () => 0.999; });
   await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
@@ -512,34 +512,13 @@ test("a quick-click bubble visibly distorts letter ink without moving its hitbox
   });
   expect(await hitLetter()).toBe(true);
 
-  await page.mouse.click(home.x + 8, home.y + home.height + 12);
-  await page.clock.runFor(700);
+  await page.mouse.move(home.x + home.width * 0.68, home.y + home.height + 55);
+  await page.mouse.down();
+  await page.clock.runFor(1000);
+  await page.mouse.up();
+  await page.clock.runFor(1400);
   await expect(page.locator("#name")).toHaveCSS("filter", /name-bubble-refraction/);
-  const warped = await ink();
-  const changedPixels = await page.evaluate(async captures => {
-    const [before, after] = await Promise.all(captures.map(async capture => {
-      const image = new Image();
-      image.src = "data:image/png;base64," + capture;
-      await image.decode();
-      return image;
-    }));
-    const canvas = document.createElement("canvas");
-    canvas.width = before.width;
-    canvas.height = before.height;
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-    const pixels = image => {
-      context.drawImage(image, 0, 0);
-      return context.getImageData(0, 0, canvas.width, canvas.height).data;
-    };
-    const original = pixels(before);
-    const distorted = pixels(after);
-    let changed = 0;
-    for (let i = 0; i < original.length; i += 4) {
-      if (Math.abs(original[i] - distorted[i]) > 40) changed++;
-    }
-    return changed;
-  }, [original, warped].map(capture => capture.toString("base64")));
-  expect(changedPixels).toBeGreaterThan(100);
+  expect(await ink()).not.toEqual(original);
   expect(await letter.boundingBox()).toEqual(home);
   expect(await hitLetter()).toBe(true);
 

@@ -23,12 +23,12 @@ function makeMap(context, radius) {
       const dx = (x + 0.5) * 2 / size - 1;
       const distance = Math.hypot(dx, dy);
       if (distance >= 1) continue;
-      // Keep the magnification strong across the face before easing it out at the rim.
-      const bend = 0.94 * radius * (1 - distance ** 4) ** 2 * 255 / displacementScale;
+      // Sample toward the center and ease the bend out at the bubble's rim.
+      const bend = 0.58 * radius * (1 - distance ** 2) ** 2 * 255 / displacementScale;
       const offset = (y * size + x) * 4;
       image.data[offset] = 128 - dx * bend;
       image.data[offset + 1] = 128 - dy * bend;
-      image.data[offset + 3] = 255 * Math.min(1, (1 - distance) * 9);
+      image.data[offset + 3] = 255 * Math.min(1, (1 - distance) * 18);
     }
   }
   context.putImageData(image, 0, 0);
@@ -37,7 +37,7 @@ function makeMap(context, radius) {
 
 export function setupBubbleRefraction(heading) {
   const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 80;
+  canvas.width = canvas.height = 48;
   const context = canvas.getContext("2d", { willReadFrequently: true });
   if (!context) return;
 
@@ -59,12 +59,13 @@ export function setupBubbleRefraction(heading) {
     xChannelSelector: "R", yChannelSelector: "G", result: "refracted",
   });
   const inside = svg("feComposite", { in: "refracted", in2: "lenses", operator: "in", result: "inside" });
+  const outside = svg("feComposite", { in: "SourceGraphic", in2: "lenses", operator: "out", result: "outside" });
   // Keep original pixels outside the lens and crossfade only along its rim.
   filter.append(
     lenses,
     displacement,
     inside,
-    svg("feComposite", { in: "SourceGraphic", in2: "lenses", operator: "out", result: "outside" }),
+    outside,
     svg("feComposite", { in: "inside", in2: "outside", operator: "arithmetic", k2: 1, k3: 1 })
   );
 
@@ -77,15 +78,9 @@ export function setupBubbleRefraction(heading) {
   function update(bubbles, scrollY) {
     if (!bubbles.length) return clear();
     const bounds = intro.getBoundingClientRect();
-    const candidates = [];
-    for (const { x, y, radius } of bubbles) {
-      // Give quick-click bubbles enough room to visibly bend a stroke as they pass.
-      const lensRadius = radius + Math.max(5, 10 - radius * 0.1);
-      if (x + lensRadius > bounds.left && x - lensRadius < bounds.right &&
-          y + lensRadius > bounds.top + scrollY && y - lensRadius < bounds.bottom + scrollY) {
-        candidates.push({ x, y, radius: lensRadius });
-      }
-    }
+    const candidates = bubbles.filter(({ x, y, radius }) =>
+      x + radius > bounds.left && x - radius < bounds.right &&
+      y + radius > bounds.top + scrollY && y - radius < bounds.bottom + scrollY);
     if (!candidates.length) return clear();
 
     const letters = glyphs.map(glyph => glyph.getBoundingClientRect());
@@ -136,6 +131,11 @@ export function setupBubbleRefraction(heading) {
     }
     for (const primitive of [displacement, inside]) setRegion(primitive, left, top, right - left, bottom - top);
 
+    // A single bubble can feed the filter directly without compositing a map layer.
+    const mapInput = visible.length === 1 ? "lens-map-0" : "lenses";
+    if (displacement.getAttribute("in2") !== mapInput) {
+      for (const primitive of [displacement, inside, outside]) primitive.setAttribute("in2", mapInput);
+    }
     if (!active) heading.style.filter = "url(#name-bubble-refraction)";
     active = true;
   }
