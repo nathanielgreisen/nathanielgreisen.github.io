@@ -71,14 +71,45 @@ export function curveLetterRoute(route, clear, random = Math.random) {
   return result;
 }
 
-export function prepareLetterPlayback(route, random = Math.random) {
+export function prepareLetterPlayback(route, random = Math.random, curveClear = () => true) {
+  route = route.filter((pose, i) => !i || poseDistance(route[i - 1], pose) > 1e-8);
   const lengths = [0];
   for (let i = 1; i < route.length; i++) {
     lengths.push(lengths[i - 1] + poseDistance(route[i - 1], route[i]));
   }
   const pace = { strength: 0.1 + random() * 0.13, phase: random() * Math.PI * 2,
     frequency: (1 + Math.floor(random() * 3)) * Math.PI * 2 };
-  return { route, lengths, total: lengths.at(-1), segment: 1, pace };
+  const velocities = route.map((pose, i) => pose.map((value, axis) => {
+    if (!i || i === route.length - 1) return 0;
+    const incoming = (value - route[i - 1][axis]) / (lengths[i] - lengths[i - 1]);
+    const outgoing = (route[i + 1][axis] - value) / (lengths[i + 1] - lengths[i]);
+    return incoming * outgoing > 0 ? Math.sign(incoming) * Math.min(Math.abs(incoming), Math.abs(outgoing)) : 0;
+  }));
+  function controls(i) {
+    const from = route[i - 1];
+    const to = route[i];
+    const handle = (lengths[i] - lengths[i - 1]) / 5;
+    // Matching endpoint velocities and zero endpoint acceleration give C² joins.
+    return [from, from.map((x, j) => x + handle * velocities[i - 1][j]),
+      from.map((x, j) => x + 2 * handle * velocities[i - 1][j]),
+      to.map((x, j) => x - 2 * handle * velocities[i][j]),
+      to.map((x, j) => x - handle * velocities[i][j]), to];
+  }
+  const segments = [];
+  for (let i = 1; i < route.length; i++) {
+    const curve = controls(i);
+    if ((velocities[i - 1].some(Boolean) || velocities[i].some(Boolean)) && !curveClear(curve)) {
+      // Keep the verified straight segment and ease through a stop at its ends.
+      velocities[i - 1].fill(0);
+      velocities[i].fill(0);
+      if (i > 1) {
+        i -= 2;
+        continue;
+      }
+    }
+    segments[i] = controls(i);
+  }
+  return { route, segments, lengths, total: lengths.at(-1), pace };
 }
 
 export function sampleLetterRecovery(trip, progress) {
@@ -95,10 +126,13 @@ export function sampleLetterRecovery(trip, progress) {
   const { strength, phase, frequency } = trip.pace;
   const pulse = (Math.sin(phase + frequency * linear) - Math.sin(phase)) * strength / frequency;
   const distance = total * (linear + pulse);
-  while (trip.segment < route.length - 1 && lengths[trip.segment] <= distance) trip.segment++;
-  const i = trip.segment;
+  let i = 1;
+  while (i < route.length - 1 && lengths[i] <= distance) i++;
   const fraction = (distance - lengths[i - 1]) / (lengths[i] - lengths[i - 1]);
-  const from = route[i - 1];
-  const to = route[i];
-  return mix(from, to, fraction);
+  const t = Math.max(0, Math.min(1, fraction));
+  const u = 1 - t;
+  const weights = [u ** 5, 5 * u ** 4 * t, 10 * u ** 3 * t ** 2,
+    10 * u ** 2 * t ** 3, 5 * u * t ** 4, t ** 5];
+  return route[i].map((_, axis) =>
+    trip.segments[i].reduce((value, point, j) => value + point[axis] * weights[j], 0));
 }

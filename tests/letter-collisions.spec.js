@@ -3,6 +3,23 @@ import { stepLetterPhysics } from "../src/interactions.js";
 import { canSlideFormation, glyphsOverlap } from "../src/letter-navigation.js";
 import { planLetterRoutes } from "../src/letter-planner.js";
 import { curveLetterRoute, prepareLetterPlayback, sampleLetterRecovery } from "../src/letter-recovery.js";
+
+test("a return route keeps velocity and acceleration continuous through a turn and a delayed start", () => {
+  const route = [[0, 0, 0, 0], [40, 0, 0, 0], [64, 32, 24, 0]].map(pose => Float64Array.from(pose));
+  const trip = prepareLetterPlayback(route, () => 0);
+  const step = 0.0001;
+  const [a, b, c, d, e] = [-2, -1, 0, 1, 2].map(i => sampleLetterRecovery(trip, 0.5 + i * step));
+  for (let axis = 0; axis < c.length; axis++) {
+    const incoming = (c[axis] - b[axis]) / step;
+    const outgoing = (d[axis] - c[axis]) / step;
+    expect(Math.abs(incoming - outgoing)).toBeLessThan(0.01);
+    const before = (c[axis] - 2 * b[axis] + a[axis]) / step ** 2;
+    const after = (e[axis] - 2 * d[axis] + c[axis]) / step ** 2;
+    expect(Math.abs(before - after)).toBeLessThan(5);
+  }
+  expect(c[0]).toBeCloseTo(40);
+  expect(c[2]).toBe(0);
+});
 import { overlapLetterMoves } from "../src/letter-schedule.js";
 
 const bounds = { left: 0, top: 0, right: 300, bottom: 120 };

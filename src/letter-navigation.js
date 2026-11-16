@@ -116,6 +116,56 @@ export function canSlideFormation(bodies, from, to, overlaps, bounds) {
   return true;
 }
 
+export function canCurveFormation(bodies, controls) {
+  // A Bézier curve stays inside its control hull. Check every rounded mask
+  // offset in that hull, subdividing when the rectangle is too conservative.
+  function clearPair(a, b, xs, ys, depth = 0) {
+    const left = Math.max(1 - b.mask.width, Math.round(Math.min(...xs)));
+    const right = Math.min(a.mask.width - 1, Math.round(Math.max(...xs)));
+    const top = Math.max(1 - b.mask.height, Math.round(Math.min(...ys)));
+    const bottom = Math.min(a.mask.height - 1, Math.round(Math.max(...ys)));
+    if (left > right || top > bottom) return true;
+    if ((right - left + 1) * (bottom - top + 1) <= 48 || depth === 8) {
+      let blocked = false;
+      for (let y = top; y <= bottom && !blocked; y++) {
+        for (let x = left; x <= right && !blocked; x++) {
+          blocked = glyphsOverlap(a, { ...b, x, y });
+        }
+      }
+      if (!blocked) return true;
+      if (depth === 8 || (left === right && top === bottom)) return false;
+    }
+    function split(values) {
+      const first = [values[0]];
+      const last = [values.at(-1)];
+      while (values.length > 1) {
+        values = values.slice(1).map((value, i) => (value + values[i]) / 2);
+        first.push(values[0]);
+        last.push(values.at(-1));
+      }
+      return [first, last.reverse()];
+    }
+    const [x1, x2] = split(xs);
+    const [y1, y2] = split(ys);
+    return clearPair(a, b, x1, y1, depth + 1) && clearPair(a, b, x2, y2, depth + 1);
+  }
+  const masks = bodies.map(({ mask }) => ({
+    x: -mask.left, y: -mask.top, mask,
+  }));
+  for (const [i, a] of bodies.entries()) {
+    for (let j = i + 1; j < bodies.length; j++) {
+      const b = bodies[j];
+      const x = b.bounds.left - b.letter.x + b.mask.left - (a.bounds.left - a.letter.x + a.mask.left);
+      const y = b.bounds.top - b.letter.y + b.mask.top - (a.bounds.top - a.letter.y + a.mask.top);
+      const xs = controls.map(pose => x + pose[j * 2] - pose[i * 2]);
+      const ys = controls.map(pose => y + pose[j * 2 + 1] - pose[i * 2 + 1]);
+      const target = { mask: { ...b.mask, left: 0, top: 0 } };
+      if (!clearPair(masks[i], target, xs, ys)) return false;
+    }
+  }
+  return true;
+}
+
 export function glyphContact(a, b) {
   const dx = Math.round(b.x + b.mask.left - a.x - a.mask.left);
   const dy = Math.round(b.y + b.mask.top - a.y - a.mask.top);

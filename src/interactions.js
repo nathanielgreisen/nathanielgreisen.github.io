@@ -2,7 +2,7 @@ import { makeLetterWake, sampleLetterWake } from "./letter-wake.js";
 import { contactImpulse, spinFromFlick, wrapAngle } from "./letter-motion.js";
 import { createGlyphRotator, readGlyphMask } from "./letter-rotation.js";
 import { blocks, glyphContact, glyphsOverlap } from "./letter-navigation.js";
-import { prepareLetterPlayback, sampleLetterRecovery } from "./letter-recovery.js";
+import { sampleLetterRecovery } from "./letter-recovery.js";
 import { setupBubbleRefraction } from "./bubble-refraction.js";
 import { beginBubbleMerge, sampleBubbleMotion } from "./bubble-motion.js";
 
@@ -447,15 +447,15 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
 
   function planReturn(bodies, bounds) {
     const worker = new Worker(new URL("./letter-planner-worker.js", import.meta.url), { type: "module" });
-    const request = { worker, route: null };
+    const request = { worker, trip: null };
     draft = request;
     heading.dataset.returnPlan = "planning";
-    function complete(route) {
+    function complete(trip) {
       worker.terminate();
       if (draft !== request) return;
-      request.route = route;
-      heading.dataset.returnPlan = route ? "ready" : "blocked";
-      if (route && performance.now() >= returnAt) scheduleLetters();
+      request.trip = trip;
+      heading.dataset.returnPlan = trip ? "ready" : "blocked";
+      if (trip && performance.now() >= returnAt) scheduleLetters();
     }
     worker.addEventListener("message", ({ data }) => complete(data), { once: true });
     worker.addEventListener("error", () => complete(null), { once: true });
@@ -472,7 +472,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
 
   function regroup(bodies, bounds, time) {
     if (!recovery) {
-      const trip = prepareLetterPlayback(draft.route);
+      const trip = draft.trip;
       const duration = Math.min(5000, Math.max(800, trip.total * 7));
       recovery = { started: time, lastFrame: time, trip, duration };
       cancelPlan();
@@ -525,7 +525,7 @@ function setupNameLetters(heading, reducedMotion, updateGridLetters, signal) {
       return { letter, bounds, mask: maskAt(letter.angle), maskAt, pivot, inertia,
         x: bounds.left, y: bounds.top };
     });
-    if (recovery || (!drag && draft?.route && time >= returnAt)) {
+    if (recovery || (!drag && draft?.trip && time >= returnAt)) {
       regroup(bodies, gridBounds, time);
       return;
     }
