@@ -7,14 +7,6 @@ export function mountPageInteractions(container) {
   const canvas = container.querySelector(".intro-grid");
   const grid = canvas && setupGrid(canvas, reducedMotion, signal);
 
-  for (const row of container.querySelectorAll(".project-list summary")) {
-    row.addEventListener("pointermove", event => {
-      if (event.pointerType === "touch") return;
-      const bounds = row.getBoundingClientRect();
-      row.style.setProperty("--pointer-x", (event.clientX - bounds.left) + "px");
-    }, { passive: true, signal });
-  }
-
   return {
     grid,
     reducedMotion,

@@ -143,62 +143,7 @@ body.forming-bubble {
 }
 
 .projects h2 { font-size: 16px; margin: 21px 0 0; }
-details { border-bottom: 1px solid var(--rule); }
-
-summary {
-  display: grid;
-  grid-template-columns: minmax(156px, 1fr) 1.35fr 18px;
-  align-items: baseline;
-  gap: 18px;
-  padding-block: 20px;
-  cursor: pointer;
-  list-style: none;
-}
-
-summary::-webkit-details-marker { display: none; }
-summary:hover .project-name { text-decoration: underline; text-underline-offset: 4px; }
-.project-name { font-weight: bold; }
-.description { color: var(--muted); font-size: 15px; }
-.toggle { text-align: right; font-size: 18px; }
-.toggle::before { content: "+"; }
-details[open] .toggle::before { content: "−"; }
-
-.project-detail { padding: 0 24px 22px 0; max-width: 650px; }
-.project-detail p { margin: 0 0 10px; color: var(--muted); }
-.project-detail a, .more { font-size: 14px; }
-.more { display: inline-block; margin-top: 22px; }
-
-.index { margin: 0 0 68px; border-top: 1px solid var(--rule); }
-.index-entry { display: grid; grid-template-columns: minmax(175px, .75fr) 1fr; gap: 20px; padding-block: 21px; border-bottom: 1px solid var(--rule); }
-.index-entry h2, .index-entry p { font-size: 16px; margin: 0; }
-.index-entry p { color: var(--muted); }
-
-.article { border-top: 1px solid var(--rule); padding-block: 32px 56px; max-width: 720px; }
-.article h2 { font-size: 22px; margin: 28px 0 10px; }
-.article h2:first-child { margin-top: 0; }
-.article p { margin: 0 0 16px; color: var(--muted); }
-.telemetry-scroll { overflow-x: auto; margin-bottom: 24px; }
-.telemetry { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
-.telemetry caption { text-align: left; color: var(--muted); margin-bottom: 6px; }
-.telemetry th, .telemetry td { padding: 8px 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--rule); }
-.telemetry thead th { color: var(--muted); }
-.telemetry tbody tr:hover > * { background: #212121; }
-.telemetry tbody td:hover, .telemetry tbody th:hover { background: #343434; color: var(--text); }
-
-@media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  .project-list summary { position: relative; overflow: hidden; }
-  .project-list summary:hover::after {
-    content: "";
-    position: absolute;
-    bottom: 0;
-    left: var(--pointer-x, 50%);
-    width: 64px;
-    height: 1px;
-    background: #858585;
-    transform: translateX(-50%);
-    pointer-events: none;
-  }
-}
+.projects p { margin: 21px 0 0; color: var(--muted); }
 
 @media (max-width: 690px) {
   .page-width { width: calc(100% - 36px); }
@@ -207,8 +152,5 @@ details[open] .toggle::before { content: "−"; }
   .intro p { font-size: 16px; }
   .home-intro h1 { font-size: clamp(38px, 10vw, 67px); }
   .projects { grid-template-columns: 1fr; gap: 0; }
-  summary { grid-template-columns: 1fr 18px; gap: 3px 12px; }
-  .description { grid-row: 2; }
-  .toggle { grid-row: 1; grid-column: 2; }
-  .index-entry { grid-template-columns: 1fr; gap: 8px; }
+  .projects p { margin-top: 8px; }
 }

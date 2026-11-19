@@ -2,7 +2,8 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
-const pages = ["index", "projects", "notes", "experiments", "replaying-robot-logs"];
+const pageFiles = ["index.html", "projects/index.html", "notes/index.html"]
+  .map(page => fileURLToPath(new URL(page, import.meta.url)));
 
 export default defineConfig(({ isSsrBuild }) => ({
   base: "./",
@@ -11,7 +12,7 @@ export default defineConfig(({ isSsrBuild }) => ({
   server: { host: "127.0.0.1" },
   build: isSsrBuild ? {} : {
     rolldownOptions: {
-      input: pages.map(page => fileURLToPath(new URL(`./${page}.html`, import.meta.url))),
+      input: pageFiles,
     },
   },
 }));

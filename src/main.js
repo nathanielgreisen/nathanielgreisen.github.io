@@ -2,6 +2,10 @@ import { mountPageInteractions } from "./grid-interactions.js";
 import "../style.css";
 
 const container = document.getElementById("root");
+const { pathname, search, hash } = window.location;
+if (pathname.endsWith("/index.html")) {
+  history.replaceState(history.state, "", pathname.slice(0, -"index.html".length) + search + hash);
+}
 
 export function startPage(mountInteractions) {
   if (import.meta.env.DEV) {

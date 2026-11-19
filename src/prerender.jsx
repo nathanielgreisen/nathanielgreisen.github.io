@@ -4,7 +4,7 @@ import { Site } from "./Site.jsx";
 
 const output = new URL("../dist/", import.meta.url);
 const root = /(<div id="root" data-page="([^"]+)">)<\/div>/;
-const pages = (await readdir(output)).filter(filename => filename.endsWith(".html"));
+const pages = (await readdir(output, { recursive: true })).filter(filename => filename.endsWith(".html"));
 
 await Promise.all(pages.map(async filename => {
   const file = new URL(filename, output);

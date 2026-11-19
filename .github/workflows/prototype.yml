@@ -4,6 +4,11 @@ on:
   push:
     branches: [portfolio-prototype]
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the verified site to GitHub Pages
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -24,3 +29,23 @@ jobs:
         with:
           name: portfolio-static
           path: dist/
+      - if: github.event_name == 'workflow_dispatch' && inputs.publish
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist/
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

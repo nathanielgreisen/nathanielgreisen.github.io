@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-const routes = ["index.html", "projects.html", "notes.html", "experiments.html", "replaying-robot-logs.html"];
+const routes = { home: "/", projects: "/projects/", notes: "/notes/" };
 
 async function readContent(page) {
   return page.evaluate(() => {
@@ -8,6 +8,7 @@ async function readContent(page) {
     for (const detail of details) detail.open = true;
     return {
       title: document.title,
+      canonical: document.querySelector('link[rel="canonical"]').getAttribute("href"),
       language: document.documentElement.lang,
       text: ["header", "main", "footer"].map(selector => document.querySelector(selector).innerText),
       headings: [...document.querySelectorAll("h1, h2")].map(heading => ({
@@ -26,20 +27,20 @@ async function readContent(page) {
   });
 }
 
-for (const route of routes) {
-  test(`${route} preserves original content in the static build`, async ({ browser, baseURL }) => {
+for (const [name, route] of Object.entries(routes)) {
+  test(`${route} includes its content in the static build`, async ({ browser, baseURL }) => {
     const page = await browser.newPage({ javaScriptEnabled: false, baseURL });
     try {
       await page.goto(route);
       const content = await readContent(page);
-      expect(content.text[1].length).toBeGreaterThan(50);
+      expect(content.canonical).toBe(new URL(route, "https://greisen.dev").href);
       if (process.env.BASELINE_URL) {
         await page.goto(new URL(route, process.env.BASELINE_URL).href);
         const original = await readContent(page);
         expect(content).toEqual(original);
-        expect(JSON.stringify(original, null, 2) + "\n").toMatchSnapshot(`${route}.json`);
+        expect(JSON.stringify(original, null, 2) + "\n").toMatchSnapshot(`${name}.json`);
       } else {
-        expect(JSON.stringify(content, null, 2) + "\n").toMatchSnapshot(`${route}.json`);
+        expect(JSON.stringify(content, null, 2) + "\n").toMatchSnapshot(`${name}.json`);
       }
     } finally {
       await page.close();
@@ -49,7 +50,7 @@ for (const route of routes) {
 
 if (process.env.BASELINE_URL) {
   for (const width of [1200, 390]) {
-    for (const route of routes) {
+    for (const route of Object.values(routes)) {
       test(`${route} matches the original layout at ${width}px`, async ({ page }) => {
         await page.setViewportSize({ width, height: 850 });
         await page.emulateMedia({ reducedMotion: "reduce" });

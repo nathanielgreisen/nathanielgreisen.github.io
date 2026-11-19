@@ -16,31 +16,37 @@ async function quickFlick(letter, { offset, dx = 0, dy, ms }) {
   }, { offset, dx, dy, ms });
 }
 
-test("project disclosures and note links work in the production build", async ({ page }) => {
+test("portfolio navigation uses clean URLs", async ({ page }) => {
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
-  await page.goto("index.html");
-  const project = page.locator("details").first();
-  await project.locator("summary").click();
-  await expect(project.getByRole("link", { name: "View source on GitHub" })).toBeVisible();
-  await project.locator("summary").click();
-  await expect(project.getByRole("link", { name: "View source on GitHub" })).toBeHidden();
+  await page.goto("/");
+  const home = page.getByRole("link", { name: "Nathaniel Greisen" });
+  await home.click();
+  await expect(page).toHaveURL("/");
 
-  await page.getByRole("link", { name: "View all projects" }).click();
-  await expect(page).toHaveURL(/projects\.html$/);
-  await expect(page.locator("details")).toHaveCount(5);
+  await page.getByRole("link", { name: "Projects", exact: true }).click();
+  await expect(page).toHaveURL("/projects/");
+  await expect(page.getByText("I will put projects here soon! :)")).toBeVisible();
+  await home.click();
+  await expect(page).toHaveURL("/");
+
   await page.getByRole("link", { name: "Notes", exact: true }).click();
-  await page.getByRole("link", { name: "Turning a bug into a test fixture" }).click();
-  await expect(page).toHaveURL(/replaying-robot-logs\.html#fixtures$/);
-  await expect(page.locator("#fixtures")).toBeVisible();
-  await page.getByRole("link", { name: "Back to notes" }).click();
-  await page.getByRole("link", { name: "Drawing the background grid" }).click();
-  await expect(page.getByRole("heading", { name: "Drawing the background grid" })).toBeVisible();
+  await expect(page).toHaveURL("/notes/");
+  await expect(page.getByText("I will put notes here soon! :)")).toBeVisible();
+  await home.click();
+  await expect(page).toHaveURL("/");
   expect(errors).toEqual([]);
 });
 
+test("explicit index URLs keep their query and fragment when cleaned", async ({ page }) => {
+  await page.goto("/index.html?from=bookmark#projects");
+  await expect(page).toHaveURL("/?from=bookmark#projects");
+  await page.goto("/notes/index.html?from=bookmark#page-title");
+  await expect(page).toHaveURL("/notes/?from=bookmark#page-title");
+});
+
 test("the intro grid reacts to the pointer", async ({ page }) => {
-  await page.goto("experiments.html");
+  await page.goto("/notes/");
   const grid = page.locator(".intro-grid");
   await expect.poll(() => grid.evaluate(canvas => canvas.width)).toBeGreaterThan(300);
   const still = await grid.evaluate(canvas => canvas.toDataURL());
@@ -54,7 +60,7 @@ test("letter movement bends the grid until the letters settle", async ({ page })
   await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-01-01T00:00:00.100Z"));
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.goto("index.html");
+  await page.goto("/");
   const grid = page.locator(".intro-grid");
   await expect.poll(() => grid.evaluate(canvas => canvas.width)).toBeGreaterThan(300);
   const readGrid = () => grid.evaluate(canvas => canvas.toDataURL());
@@ -83,7 +89,7 @@ test("all letters wait for shared stillness and coast when regrouping is interru
   await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("index.html");
+  await page.goto("/");
   const letters = page.locator(".name-letter");
   const first = letters.nth(8);
   const second = letters.last();
@@ -142,7 +148,7 @@ test("two displaced letters find their way home around each other", async ({ pag
   await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("index.html");
+  await page.goto("/");
   const letters = page.locator(".name-letter");
   const positions = () => letters.evaluateAll(elements => elements.map(element => {
     const { x, y } = element.getBoundingClientRect();
@@ -193,7 +199,7 @@ for (const width of [1200, 390]) {
       await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
       await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
       await page.emulateMedia({ reducedMotion: "reduce" });
-      await page.goto("index.html");
+      await page.goto("/");
       const letters = page.locator(".name-letter");
       const positions = () => letters.evaluateAll(elements =>
         elements.map(el => [el.getBoundingClientRect().left, el.getBoundingClientRect().top]));
@@ -245,7 +251,7 @@ for (const width of [390, 1200]) {
     await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
     await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.goto("index.html");
+    await page.goto("/");
     await page.evaluate(() => {
       let seed = 2;
       Math.random = () => {
@@ -281,7 +287,7 @@ for (const width of [390, 1200]) {
 
 test("the five pixel drift continues through a grab without moving the physics box", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.goto("index.html");
+  await page.goto("/");
   const letter = page.locator(".name-letter").first();
   const glyph = letter.locator(".name-letter-glyph");
   const samples = await glyph.evaluate(async element => {
@@ -320,7 +326,7 @@ test("the five pixel drift continues through a grab without moving the physics b
 
 test("a dragged letter transfers momentum to other letters", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("index.html");
+  await page.goto("/");
   const letters = page.locator(".name-letter");
   await expect(letters).toHaveCount(16);
   const first = await letters.first().boundingBox();
@@ -344,7 +350,7 @@ test("a flick between animation frames launches a letter at the pointer's speed"
   await page.emulateMedia({ reducedMotion: "reduce" });
 
   async function flick(duration, releaseOnly = false) {
-    await page.goto("index.html");
+    await page.goto("/");
     const letter = page.locator(".name-letter").first();
     const bounds = await letter.boundingBox();
     const x = bounds.x + bounds.width / 2;
@@ -390,7 +396,7 @@ test("off-center flicks spin letters that straighten in staggered turns before m
   await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("index.html");
+  await page.goto("/");
   const letters = page.locator(".name-letter");
   const pair = [letters.nth(8), letters.last()];
   const homes = await Promise.all(pair.map(letter => letter.boundingBox()));
@@ -442,7 +448,7 @@ for (const [side, width] of [["left", 1200], ["right", 390]]) {
     await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
     await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
     await page.emulateMedia({ reducedMotion: "no-preference" });
-    await page.goto("index.html");
+    await page.goto("/");
     const letter = page.locator(".name-letter").last();
     const home = await letter.boundingBox();
     const grid = await page.locator(".home-intro").boundingBox();
@@ -496,7 +502,7 @@ test("a passing bubble distorts letter ink without moving its hitbox", async ({ 
   await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   await page.clock.pauseAt(new Date("2026-01-01T00:00:01Z"));
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  await page.goto("index.html");
+  await page.goto("/");
   await page.addStyleTag({ content: `
     .name-letter-glyph { animation: none !important; }
     .intro-grid, .page-bubbles { visibility: hidden; }
@@ -538,7 +544,7 @@ test("a held bubble grows, survives an interrupted release, and pops at the view
       return arc.call(this, x, y, radius, ...args);
     };
   });
-  await page.goto("index.html");
+  await page.goto("/");
   const canvas = page.locator(".page-bubbles");
   await expect.poll(() => canvas.evaluate(element => element.width)).toBeGreaterThan(300);
   await page.evaluate(() => { document.body.style.minHeight = "1500px"; });
