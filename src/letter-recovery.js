@@ -21,12 +21,13 @@ export function curveLetterRoute(route, clear, random = Math.random) {
     if (i >= 0) arrivals[i + 1]++;
   }
   const rounded = [route[0]];
+  let outgoing = route.length > 2 ? poseDistance(route[0], route[1]) : 0;
   for (let i = 1; i < route.length - 1; i++) {
     const before = route[i - 1];
     const corner = route[i];
     const after = route[i + 1];
-    const incoming = poseDistance(before, corner);
-    const outgoing = poseDistance(corner, after);
+    const incoming = outgoing;
+    outgoing = poseDistance(corner, after);
     const cut = Math.min(15, incoming * 0.23, outgoing * 0.23);
     // Keep the shared home pose as a waypoint so the whole group lands on it.
     if (cut < 2 || arrivals[i] > 1) {
@@ -66,7 +67,7 @@ export function curveLetterRoute(route, clear, random = Math.random) {
       for (let step = 1; step < 10; step++) {
         const t = step / 10;
         const arc = Math.sin(Math.PI * t) ** 2 * strength;
-        points.push(mix(from, to, t).map((value, j) => value + offsets[j] * arc));
+        points.push(from.map((value, j) => value + (to[j] - value) * t + offsets[j] * arc));
       }
       points.push(to);
       if (checked(points, clear)) {
@@ -80,11 +81,16 @@ export function curveLetterRoute(route, clear, random = Math.random) {
 }
 
 export function prepareLetterPlayback(route, random = Math.random, curveClear = () => true) {
-  route = route.filter((pose, i) => !i || poseDistance(route[i - 1], pose) > 1e-8);
+  const poses = route.slice(0, 1);
   const lengths = [0];
   for (let i = 1; i < route.length; i++) {
-    lengths.push(lengths[i - 1] + poseDistance(route[i - 1], route[i]));
+    const distance = poseDistance(route[i - 1], route[i]);
+    if (!(distance > 1e-8)) continue;
+    const last = poses.at(-1);
+    lengths.push(lengths.at(-1) + (last === route[i - 1] ? distance : poseDistance(last, route[i])));
+    poses.push(route[i]);
   }
+  route = poses;
   const pace = { strength: 0.1 + random() * 0.13, phase: random() * Math.PI * 2,
     frequency: (1 + Math.floor(random() * 3)) * Math.PI * 2 };
   const velocities = route.map((pose, i) => pose.map((value, axis) => {
@@ -105,7 +111,7 @@ export function prepareLetterPlayback(route, random = Math.random, curveClear = 
   }
   const segments = [];
   for (let i = 1; i < route.length; i++) {
-    const curve = controls(i);
+    let curve = controls(i);
     if ((velocities[i - 1].some(Boolean) || velocities[i].some(Boolean)) && !curveClear(curve)) {
       // Keep the verified straight segment and ease through a stop at its ends.
       velocities[i - 1].fill(0);
@@ -114,8 +120,9 @@ export function prepareLetterPlayback(route, random = Math.random, curveClear = 
         i -= 2;
         continue;
       }
+      curve = controls(i);
     }
-    segments[i] = controls(i);
+    segments[i] = curve;
   }
   return { route, segments, lengths, total: lengths.at(-1), pace };
 }
@@ -134,13 +141,22 @@ export function sampleLetterRecovery(trip, progress) {
   const { strength, phase, frequency } = trip.pace;
   const pulse = (Math.sin(phase + frequency * linear) - Math.sin(phase)) * strength / frequency;
   const distance = total * (linear + pulse);
-  let i = 1;
-  while (i < route.length - 1 && lengths[i] <= distance) i++;
+  let i = 1, end = route.length - 1;
+  while (i < end) {
+    const mid = (i + end) >>> 1;
+    if (lengths[mid] <= distance) i = mid + 1;
+    else end = mid;
+  }
   const fraction = (distance - lengths[i - 1]) / (lengths[i] - lengths[i - 1]);
   const t = Math.max(0, Math.min(1, fraction));
   const u = 1 - t;
-  const weights = [u ** 5, 5 * u ** 4 * t, 10 * u ** 3 * t ** 2,
-    10 * u ** 2 * t ** 3, 5 * u * t ** 4, t ** 5];
-  return route[i].map((_, axis) =>
-    trip.segments[i].reduce((value, point, j) => value + point[axis] * weights[j], 0));
+  const a = u ** 5;
+  const b = 5 * u ** 4 * t;
+  const c = 10 * u ** 3 * t ** 2;
+  const d = 10 * u ** 2 * t ** 3;
+  const e = 5 * u * t ** 4;
+  const f = t ** 5;
+  const [start, first, second, third, fourth, finish] = trip.segments[i];
+  return route[i].map((_, axis) => 0 + start[axis] * a + first[axis] * b +
+    second[axis] * c + third[axis] * d + fourth[axis] * e + finish[axis] * f);
 }

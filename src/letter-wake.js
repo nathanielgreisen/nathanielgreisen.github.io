@@ -2,14 +2,27 @@ export function traceGlyphOutline(rows, width) {
   const outline = [];
   const stride = Math.ceil(width / 3);
   const covered = new Uint8Array(stride * Math.ceil(rows.length / 3));
-  const hasInk = (row, x) => row.some(([start, end]) => x >= start && x < end);
   for (let y = 1; y < rows.length - 1; y++) {
     const cellRow = Math.floor(y / 3) * stride;
+    const above = rows[y - 1];
+    const below = rows[y + 1];
+    let up = 0, down = 0;
     for (const [start, end] of rows[y]) {
-      for (let x = Math.max(1, start); x < Math.min(width - 1, end); x++) {
+      const right = Math.min(width - 1, end);
+      for (let x = Math.max(1, start); x < right; x++) {
         const cell = cellRow + Math.floor(x / 3);
-        if (covered[cell] ||
-          (x > start && x + 1 < end && hasInk(rows[y - 1], x) && hasInk(rows[y + 1], x))) continue;
+        if (covered[cell]) continue;
+        if (x > start && x + 1 < end) {
+          while (up < above.length && above[up][1] <= x) up++;
+          if (up < above.length && above[up][0] <= x) {
+            while (down < below.length && below[down][1] <= x) down++;
+            if (down < below.length && below[down][0] <= x) {
+              // Skip this interior span up to the first possible outline pixel.
+              x = Math.min(end - 1, above[up][1], below[down][1]) - 1;
+              continue;
+            }
+          }
+        }
         covered[cell] = 1;
         outline.push({ x: x + 0.5, y: y + 0.5 });
       }
@@ -49,13 +62,13 @@ export function makeLetterWake(body, gridBounds, dt) {
 
 export function sampleLetterWake(x, y, wake) {
   if (x < wake.left || x > wake.right || y < wake.top || y > wake.bottom) return null;
+  const { outline, trail, reach, strength, ux, uy } = wake;
   const localX = x - wake.x;
   const localY = y - wake.y;
-  const along = localX * wake.ux + localY * wake.uy;
-  const across = localY * wake.ux - localX * wake.uy;
-  const { outline } = wake;
-  const low = across - wake.reach;
-  const high = across + wake.reach;
+  const along = localX * ux + localY * uy;
+  const across = localY * ux - localX * uy;
+  const low = across - reach;
+  const high = across + reach;
   let start = 0, end = outline.length;
   while (start < end) {
     const mid = (start + end) >>> 1;
@@ -71,21 +84,21 @@ export function sampleLetterWake(x, y, wake) {
     if (edge.across >= high) break;
     const normal = across - edge.across;
     const forward = along - edge.along;
-    if (forward >= wake.trail || forward <= -wake.reach) continue;
-    const tail = 1 - Math.max(0, forward) / wake.trail;
-    const maxWeight = tail * wake.strength;
+    if (forward >= trail || forward <= -reach) continue;
+    const tail = 1 - Math.max(0, forward) / trail;
+    const maxWeight = tail * strength;
     if (maxWeight < force) continue;
-    const reach = wake.reach * (0.4 + 0.6 * tail);
+    const localReach = reach * (0.4 + 0.6 * tail);
     const excess = Math.min(0, forward);
     const distanceSquared = normal * normal + excess * excess;
-    if (distanceSquared >= reach * reach) continue;
-    const falloff = 1 - Math.sqrt(distanceSquared) / reach;
+    if (distanceSquared >= localReach * localReach) continue;
+    const falloff = 1 - Math.sqrt(distanceSquared) / localReach;
     const weight = falloff * falloff * maxWeight;
     if (weight < force || (weight === force && edge.index >= bestIndex)) continue;
     force = weight;
     bestIndex = edge.index;
-    shiftX = (excess * wake.ux - normal * wake.uy) * weight * 3.6;
-    shiftY = (excess * wake.uy + normal * wake.ux) * weight * 3.6;
+    shiftX = (excess * ux - normal * uy) * weight * 3.6;
+    shiftY = (excess * uy + normal * ux) * weight * 3.6;
   }
   return force ? { shiftX, shiftY, force } : null;
 }

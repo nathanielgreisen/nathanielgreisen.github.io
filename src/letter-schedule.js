@@ -24,8 +24,16 @@ function makeTracks(route) {
 }
 
 function at(track, time) {
-  let next = 1;
-  while (next < track.length && track[next].time < time) next++;
+  let next = 1, end = track.length;
+  while (next < end) {
+    const mid = (next + end) >>> 1;
+    if (track[mid].time < time) next = mid + 1;
+    else end = mid;
+  }
+  return interpolate(track, time, next);
+}
+
+function interpolate(track, time, next) {
   if (next === track.length) return track.at(-1);
   const a = track[next - 1];
   const b = track[next];
@@ -36,14 +44,27 @@ function at(track, time) {
 }
 
 function compatible(a, b, bodies, bounds) {
-  const times = [...new Set([...a, ...b].map(point => point.time))].sort((l, r) => l - r);
-  let previous;
-  for (const time of times) {
-    const first = at(a, time);
-    const second = at(b, time);
-    const pose = [first.x, first.y, second.x, second.y];
-    if (previous && !canSlideFormation(bodies, previous, pose, glyphsOverlap, bounds)) return false;
+  let aNext = 0, bNext = 0;
+  let previous = new Float64Array(4);
+  let pose = new Float64Array(4);
+  let started = false;
+  // Check both tracks at each distinct waypoint time without sorting them again.
+  while (aNext < a.length || bNext < b.length) {
+    const time = Math.min(a[aNext]?.time ?? Infinity, b[bNext]?.time ?? Infinity);
+    if (!Number.isFinite(time)) return false;
+    const first = interpolate(a, time, Math.max(1, aNext));
+    const second = interpolate(b, time, Math.max(1, bNext));
+    pose[0] = first.x;
+    pose[1] = first.y;
+    pose[2] = second.x;
+    pose[3] = second.y;
+    if (started && !canSlideFormation(bodies, previous, pose, glyphsOverlap, bounds)) return false;
+    const swap = previous;
     previous = pose;
+    pose = swap;
+    started = true;
+    while (aNext < a.length && a[aNext].time === time) aNext++;
+    while (bNext < b.length && b[bNext].time === time) bNext++;
   }
   return true;
 }
@@ -67,7 +88,7 @@ function inWindow(track, info, start, end, keepPauses) {
       points.push({ ...point, time });
     }
   };
-  if (keepPauses) {
+  if (keepPauses && info.last > info.first) {
     for (const point of track) {
       if (point.time >= info.first && point.time <= info.last) {
         place(point, (point.time - info.first) / (info.last - info.first));
@@ -82,8 +103,14 @@ function inWindow(track, info, start, end, keepPauses) {
 }
 
 function activity(track) {
-  return Array.from({ length: 24 }, (_, i) =>
-    travel(at(track, i / 24), at(track, (i + 1) / 24)) > 0.35 ? 1 : 0);
+  const samples = new Array(24);
+  let previous = at(track, 0);
+  for (let i = 0; i < samples.length; i++) {
+    const next = at(track, (i + 1) / samples.length);
+    samples[i] = travel(previous, next) > 0.35 ? 1 : 0;
+    previous = next;
+  }
+  return samples;
 }
 
 function score(candidate, others, goal) {
@@ -95,11 +122,19 @@ function score(candidate, others, goal) {
 }
 
 function toRoute(tracks) {
-  const times = [...new Set(tracks.flatMap(track => track.map(point => point.time)))].sort((a, b) => a - b);
-  return times.map(time => Float64Array.from(tracks.flatMap(track => {
-    const point = at(track, time);
-    return [point.x, point.y];
-  })));
+  const times = new Set();
+  for (const track of tracks) {
+    for (const point of track) times.add(point.time);
+  }
+  return [...times].sort((a, b) => a - b).map(time => {
+    const pose = new Float64Array(tracks.length * 2);
+    for (let i = 0; i < tracks.length; i++) {
+      const point = at(tracks[i], time);
+      pose[i * 2] = point.x;
+      pose[i * 2 + 1] = point.y;
+    }
+    return pose;
+  });
 }
 
 export function overlapLetterMoves(route, bodies, bounds) {

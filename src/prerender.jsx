@@ -1,14 +1,16 @@
 import { readFile, readdir, writeFile } from "node:fs/promises";
-import { renderToString } from "react-dom/server";
+import { renderToStaticMarkup } from "react-dom/server";
 import { Site } from "./Site.jsx";
 
 const output = new URL("../dist/", import.meta.url);
-for (const filename of await readdir(output)) {
-  if (!filename.endsWith(".html")) continue;
+const root = /(<div id="root" data-page="([^"]+)">)<\/div>/;
+const pages = (await readdir(output)).filter(filename => filename.endsWith(".html"));
+
+await Promise.all(pages.map(async filename => {
   const file = new URL(filename, output);
   const html = await readFile(file, "utf8");
-  const root = /(<div id="root" data-page="([^"]+)">)<\/div>/;
-  if (!root.test(html)) throw new Error(`Missing React mount in ${filename}`);
-  await writeFile(file, html.replace(root, (_, opening, page) =>
-    `${opening}${renderToString(<Site page={page} />)}</div>`));
-}
+  const rendered = html.replace(root, (_, opening, page) =>
+    `${opening}${renderToStaticMarkup(<Site page={page} />)}</div>`);
+  if (rendered === html) throw new Error(`Missing page root in ${filename}`);
+  await writeFile(file, rendered);
+}));

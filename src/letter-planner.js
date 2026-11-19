@@ -10,12 +10,15 @@ function fit(point, body, bounds) {
 }
 
 function hasRoom(body, point, others) {
-  const candidate = { ...body, ...point };
+  const candidate = { mask: body.mask, x: point.x, y: point.y };
   return !others.some(other => glyphsOverlap(candidate, other));
 }
 
-function clearLine(body, from, to, others) {
-  return !others.some(other => blocks(body, from, to, other, glyphsOverlap));
+function clearLine(body, from, to, others, rectangles) {
+  for (let i = 0; i < others.length; i++) {
+    if (blocks(body, from, to, others[i], glyphsOverlap, rectangles?.[i])) return false;
+  }
+  return true;
 }
 
 function findPath(body, target, others, bounds) {
@@ -32,13 +35,13 @@ function findPath(body, target, others, bounds) {
   function add(point) {
     const fitted = fit(point, body, bounds);
     const key = `${fitted.x},${fitted.y}`;
-    if (seen.has(key) || !hasRoom(body, fitted, others)) return;
+    if (seen.has(key)) return;
     seen.add(key);
-    nodes.push(fitted);
+    if (hasRoom(body, fitted, others)) nodes.push(fitted);
   }
 
-  for (const other of others) {
-    const rect = obstacle(body, other);
+  const rectangles = others.map(other => obstacle(body, other));
+  for (const rect of rectangles) {
     for (const padding of [3, 0.65]) {
       for (const x of [rect.left - padding, rect.right + padding]) {
         for (const y of [rect.top - padding, rect.bottom + padding]) add({ x, y });
@@ -58,32 +61,38 @@ function findPath(body, target, others, bounds) {
     }
   }
 
-  const costs = nodes.map(() => Infinity);
-  const parents = nodes.map(() => -1);
-  const visited = new Set();
+  const stepPenalty = 4;
+  const heuristics = nodes.map(node => distance(node, target));
+  const costs = new Float64Array(nodes.length).fill(Infinity);
+  const scores = costs.slice();
+  const parents = new Int32Array(nodes.length);
+  const visited = new Uint8Array(nodes.length);
   costs[0] = 0;
+  scores[0] = heuristics[0];
   while (true) {
     let current = -1;
     let best = Infinity;
     for (let i = 0; i < nodes.length; i++) {
-      const score = costs[i] + distance(nodes[i], target);
-      if (!visited.has(i) && score < best) {
-        best = score;
+      if (!visited[i] && scores[i] < best) {
+        best = scores[i];
         current = i;
       }
     }
     if (current < 0) return null;
     if (current === 1) {
       const route = [];
-      for (let i = 1; i > 0; i = parents[i]) route.unshift(nodes[i]);
-      return route;
+      for (let i = 1; i > 0; i = parents[i]) route.push(nodes[i]);
+      return route.reverse();
     }
-    visited.add(current);
+    visited[current] = 1;
+    const currentCost = costs[current];
+    const cheapestStep = currentCost + stepPenalty;
     for (let i = 1; i < nodes.length; i++) {
-      if (visited.has(i)) continue;
-      const cost = costs[current] + distance(nodes[current], nodes[i]) + 4;
-      if (cost < costs[i] && clear(nodes[current], nodes[i])) {
+      if (visited[i] || costs[i] <= cheapestStep) continue;
+      const cost = currentCost + distance(nodes[current], nodes[i]) + stepPenalty;
+      if (cost < costs[i] && clearLine(body, nodes[current], nodes[i], others, rectangles)) {
         costs[i] = cost;
+        scores[i] = cost + heuristics[i];
         parents[i] = current;
       }
     }
@@ -91,7 +100,13 @@ function findPath(body, target, others, bounds) {
 }
 
 function pose(bodies) {
-  return Float64Array.from(bodies.flatMap(body => [body.x - body.home.x, body.y - body.home.y]));
+  const offsets = new Float64Array(bodies.length * 2);
+  for (let i = 0; i < bodies.length; i++) {
+    const { x, y, home } = bodies[i];
+    offsets[i * 2] = x - home.x;
+    offsets[i * 2 + 1] = y - home.y;
+  }
+  return offsets;
 }
 
 function planFrom(start, bounds, order, evacuate = false) {
@@ -101,7 +116,15 @@ function planFrom(start, bounds, order, evacuate = false) {
   const route = [pose(bodies)];
   const parked = new Set();
   const visited = new Set();
-  const othersFor = body => bodies.filter(other => other !== body);
+  const peers = new Map();
+  function othersFor(body) {
+    let others = peers.get(body);
+    if (!others) {
+      others = bodies.filter(other => other !== body);
+      peers.set(body, others);
+    }
+    return others;
+  }
   const atHome = body => distance(body, body.home) < 0.001;
   function move(body, path) {
     for (const point of path) {
@@ -111,37 +134,49 @@ function planFrom(start, bounds, order, evacuate = false) {
   }
 
   function parkOne(choices) {
-    const blockers = choices.filter(body => !parked.has(body));
-    const blockedHomes = new Map(blockers.map(body => [
-      body, slots.filter(slot => slot.home !== body.home && glyphsOverlap(body, slot)).length,
-    ]));
-    blockers.sort((a, b) => blockedHomes.get(b) - blockedHomes.get(a) || Number(atHome(a)) - Number(atHome(b)));
-    for (const body of blockers) {
+    const blockers = [];
+    for (const body of choices) {
+      if (parked.has(body)) continue;
+      let blockedHomes = 0;
+      for (const slot of slots) {
+        if (slot.home !== body.home && glyphsOverlap(body, slot)) blockedHomes++;
+      }
+      blockers.push({ body, blockedHomes, atHome: Number(atHome(body)) });
+    }
+    blockers.sort((a, b) => b.blockedHomes - a.blockedHomes || a.atHome - b.atHome);
+    for (const { body } of blockers) {
       const others = othersFor(body);
       const free = [];
+      const width = bounds.right - bounds.left - body.bounds.width;
+      const height = bounds.bottom - bounds.top - body.bounds.height;
       for (const row of [0.06, 0.94, 0.25, 0.75, 0.5]) {
+        const y = bounds.top + height * row;
         for (const col of [0.04, 0.96, 0.22, 0.78, 0.41, 0.59]) {
-          const point = fit({
-            x: bounds.left + (bounds.right - bounds.left - body.bounds.width) * col,
-            y: bounds.top + (bounds.bottom - bounds.top - body.bounds.height) * row,
-          }, body, bounds);
-          free.push(point);
+          free.push(fit({ x: bounds.left + width * col, y }, body, bounds));
         }
       }
-      const aligned = free.flatMap(point => [
-        { x: body.x, y: point.y },
-        { x: point.x, y: body.y },
-      ]);
-      const unique = new Map([...free, ...aligned].map(point => [`${point.x},${point.y}`, point]));
-      const candidates = [...unique.values()].filter(point =>
-        distance(body, point) >= 8 && hasRoom(body, point, slots) && hasRoom(body, point, others));
-      candidates.sort((a, b) => distance(body, a) - distance(body, b));
+      const unique = new Map();
+      const add = point => unique.set(`${point.x},${point.y}`, point);
+      for (const point of free) add(point);
+      for (const { x, y } of free) {
+        add({ x: body.x, y });
+        add({ x, y: body.y });
+      }
+      const candidates = [];
+      for (const point of unique.values()) {
+        const length = distance(body, point);
+        if (length >= 8 && hasRoom(body, point, slots) && hasRoom(body, point, others)) {
+          candidates.push({ point, length });
+        }
+      }
+      candidates.sort((a, b) => a.length - b.length);
       let path = null;
-      const openSpot = candidates.find(point => clearLine(body, body, point, others));
-      if (openSpot) path = [openSpot];
+      const openSpot = candidates.find(({ point }) => clearLine(body, body, point, others));
+      if (openSpot) path = [openSpot.point];
       else {
-        for (const point of candidates.slice(0, 6)) {
-          path = findPath(body, point, others, bounds);
+        const limit = Math.min(candidates.length, 6);
+        for (let i = 0; i < limit; i++) {
+          path = findPath(body, candidates[i].point, others, bounds);
           if (path) break;
         }
       }
@@ -169,37 +204,43 @@ function planFrom(start, bounds, order, evacuate = false) {
     // A parked letter can go home and recreate the same blockage. Try another strategy immediately.
     if (visited.has(state)) return null;
     visited.add(state);
-    if (canSlideFormation(start, current, origin, glyphsOverlap, bounds)) return [...route, origin];
+    if (canSlideFormation(start, current, origin, glyphsOverlap, bounds)) {
+      route.push(origin);
+      return route;
+    }
 
-    const remaining = bodies.filter(body => !atHome(body));
-    const candidates = [...remaining].sort((a, b) =>
-      order * (distance(a, a.home) - distance(b, b.home)));
-    const direct = candidates.filter(body => clearLine(body, body, body.home, othersFor(body)));
-    if (direct.length) {
-      // Start neighboring direct moves together only if their complete paths are compatible.
-      const target = current.slice();
-      for (const body of direct) {
-        const index = bodies.indexOf(body) * 2;
-        target[index] = target[index + 1] = 0;
-        if (canSlideFormation(start, current, target, glyphsOverlap, bounds)) {
-          parked.delete(body);
-        } else {
-          target[index] = current[index];
-          target[index + 1] = current[index + 1];
-        }
+    const candidates = [];
+    for (let i = 0; i < bodies.length; i++) {
+      const body = bodies[i];
+      const length = distance(body, body.home);
+      if (length < 0.001) continue;
+      candidates.push({ index: i * 2, body, length });
+    }
+    candidates.sort((a, b) => order * (a.length - b.length));
+    // Start neighboring direct moves together only if their complete paths are compatible.
+    let target;
+    for (const { index, body } of candidates) {
+      if (!clearLine(body, body, body.home, othersFor(body))) continue;
+      target ??= current.slice();
+      target[index] = target[index + 1] = 0;
+      if (canSlideFormation(start, current, target, glyphsOverlap, bounds)) {
+        parked.delete(body);
+      } else {
+        target[index] = current[index];
+        target[index + 1] = current[index + 1];
       }
-      if (target.some((value, index) => value !== current[index])) {
-        for (const [i, body] of bodies.entries()) {
-          body.x = body.home.x + target[i * 2];
-          body.y = body.home.y + target[i * 2 + 1];
-        }
-        route.push(target);
-        continue;
+    }
+    if (target?.some((value, index) => value !== current[index])) {
+      for (const [i, body] of bodies.entries()) {
+        body.x = body.home.x + target[i * 2];
+        body.y = body.home.y + target[i * 2 + 1];
       }
+      route.push(target);
+      continue;
     }
 
     let moved = false;
-    for (const body of candidates) {
+    for (const { body } of candidates) {
       const path = findPath(body, body.home, othersFor(body), bounds);
       if (!path) continue;
       move(body, path);
@@ -226,26 +267,35 @@ export function planLetterRoutes(input, bounds) {
 
   // Some typographic gaps are too narrow to enter after both neighbors have arrived.
   // Route to a looser formation first, then close the gaps as a group.
-  const centerX = (Math.min(...bodies.map(body => body.home.x)) +
-    Math.max(...bodies.map(body => body.home.x + body.bounds.width))) / 2;
-  const centerY = (Math.min(...bodies.map(body => body.home.y)) +
-    Math.max(...bodies.map(body => body.home.y + body.bounds.height))) / 2;
+  let left = Infinity, right = -Infinity, top = Infinity, bottom = -Infinity;
+  for (const { home, bounds: box } of bodies) {
+    left = Math.min(left, home.x);
+    right = Math.max(right, home.x + box.width);
+    top = Math.min(top, home.y);
+    bottom = Math.max(bottom, home.y + box.height);
+  }
+  const centerX = (left + right) / 2;
+  const centerY = (top + bottom) / 2;
   const origin = new Float64Array(bodies.length * 2);
   for (const spacing of [0.35, 0.65]) {
-    const staging = bodies.map(body => ({
-      ...body,
-      home: fit({
+    const offsets = new Float64Array(origin.length);
+    const staging = bodies.map((body, i) => {
+      const home = fit({
         x: body.home.x + (body.home.x + body.bounds.width / 2 - centerX) * spacing,
         y: body.home.y + (body.home.y + body.bounds.height / 2 - centerY) * spacing,
-      }, body, bounds),
-    }));
-    const offsets = Float64Array.from(staging.flatMap(({ home }, i) =>
-      [home.x - bodies[i].home.x, home.y - bodies[i].home.y]));
+      }, body, bounds);
+      offsets[i * 2] = home.x - body.home.x;
+      offsets[i * 2 + 1] = home.y - body.home.y;
+      return { ...body, home };
+    });
     if (!canSlideFormation(bodies, offsets, origin, glyphsOverlap, bounds)) continue;
     const route = planFrom(staging, bounds, 1);
     if (!route) continue;
-    const closing = [...route.map(point => point.map((offset, i) => offset + offsets[i])), origin];
-    if (verified(closing)) return closing;
+    for (const point of route) {
+      for (let i = 0; i < point.length; i++) point[i] += offsets[i];
+    }
+    route.push(origin);
+    if (verified(route)) return route;
   }
 
   for (const [order, evacuate] of [[1, true], [-1, false]]) {

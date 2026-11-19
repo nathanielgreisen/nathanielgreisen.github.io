@@ -1,6 +1,6 @@
 # Portfolio prototype
 
-This branch contains the React portfolio. Vite builds each of the five pages at its existing HTML path. The build prerenders the page content, then React loads in the browser to enable the canvas interactions.
+Vite builds the five portfolio pages at their existing HTML paths. React renders the page content at build time. The published pages load JavaScript for the interactions, with the letter and bubble effects loaded on the home page.
 
 ```sh
 npm ci

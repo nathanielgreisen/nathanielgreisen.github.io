@@ -1,7 +1,6 @@
 :root {
   color-scheme: dark;
   --paper: #171717;
-  --panel: #1c1c1c;
   --text: #ebebeb;
   --muted: #b2b2b2;
   --rule: #3b3b3b;
@@ -159,7 +158,7 @@ summary {
 summary::-webkit-details-marker { display: none; }
 summary:hover .project-name { text-decoration: underline; text-underline-offset: 4px; }
 .project-name { font-weight: bold; }
-.description, .sample { color: var(--muted); font-size: 15px; }
+.description { color: var(--muted); font-size: 15px; }
 .toggle { text-align: right; font-size: 18px; }
 .toggle::before { content: "+"; }
 details[open] .toggle::before { content: "−"; }
@@ -173,7 +172,6 @@ details[open] .toggle::before { content: "−"; }
 .index-entry { display: grid; grid-template-columns: minmax(175px, .75fr) 1fr; gap: 20px; padding-block: 21px; border-bottom: 1px solid var(--rule); }
 .index-entry h2, .index-entry p { font-size: 16px; margin: 0; }
 .index-entry p { color: var(--muted); }
-.index-entry .sample { display: block; font-size: 14px; margin-top: 2px; }
 
 .article { border-top: 1px solid var(--rule); padding-block: 32px 56px; max-width: 720px; }
 .article h2 { font-size: 22px; margin: 28px 0 10px; }

@@ -1,5 +1,4 @@
 import { useLayoutEffect } from "react";
-import { mountInteractions } from "./interactions.js";
 
 function Header({ current }) {
   return (
@@ -215,8 +214,8 @@ const pages = {
   "replaying-robot-logs": RobotLogs,
 };
 
-export function Site({ page, container }) {
-  useLayoutEffect(() => mountInteractions(container), [container]);
+export function Site({ page, mount }) {
+  useLayoutEffect(() => mount?.(), [mount]);
   const Page = pages[page];
   const current = page === "index" ? undefined : page === "projects" ? "projects" : "notes";
 

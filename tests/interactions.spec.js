@@ -16,7 +16,7 @@ async function quickFlick(letter, { offset, dx = 0, dy, ms }) {
   }, { offset, dx, dy, ms });
 }
 
-test("project disclosures and note links work after hydration", async ({ page }) => {
+test("project disclosures and note links work in the production build", async ({ page }) => {
   const errors = [];
   page.on("pageerror", error => errors.push(error.message));
   await page.goto("index.html");
