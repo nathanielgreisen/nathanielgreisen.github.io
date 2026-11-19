@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css">
+    <title>Wordle</title>
+</head>
+
+<body>
+    <h1> Wordle Clone </h1>
+    <dialog id="settings-dialog" aria-labelledby="settings-title">
+        <h2 id="settings-title">Game settings</h2>
+
+        <div class="slider-container">
+            <label for="number-of-guesses">Number of guesses (<span id="number-of-guesses-value">5</span>):</label>
+            <input type="range" id="number-of-guesses" name="number-of-guesses" min="1" max="10" value="6">
+        </div>
+
+        <div class="slider-container">
+            <label for="word-length">Word length (<span id="word-length-value">5</span>):</label>
+            <input type="range" id="word-length" name="word-length" min="1" max="25" value="5">
+        </div>
+
+        <div class="settings-buttons">
+            <button id="start-singleplayer" type="button">Play singleplayer</button>
+            <button id="mp-create">Create multiplayer game</button>
+            <button id="mp-join">Join multiplayer game</button>
+        </div>
+    </dialog>
+
+
+    <button id="mp-rematch">Rematch</button>
+    <button id="mp-leave">Leave Game</button>
+    <div id="mp-status"></div>
+    <div id="opp-board"></div>
+
+
+
+    <div id="game-board">
+    </div>
+
+    <div id="keyboard-cont">
+        <div id="first-row">
+            <button class="key">q</button>
+            <button class="key">w</button>
+            <button class="key">e</button>
+            <button class="key">r</button>
+            <button class="key">t</button>
+            <button class="key">y</button>
+            <button class="key">u</button>
+            <button class="key">i</button>
+            <button class="key">o</button>
+            <button class="key">p</button>
+        </div>
+        <div id="second-row">
+            <button class="key">a</button>
+            <button class="key">s</button>
+            <button class="key">d</button>
+            <button class="key">f</button>
+            <button class="key">g</button>
+            <button class="key">h</button>
+            <button class="key">j</button>
+            <button class="key">k</button>
+            <button class="key">l</button>
+        </div>
+        <div id="third-row">
+            <button class="key">Del</button>
+            <button class="key">z</button>
+            <button class="key">x</button>
+            <button class="key">c</button>
+            <button class="key">v</button>
+            <button class="key">b</button>
+            <button class="key">n</button>
+            <button class="key">m</button>
+            <button class="key">Enter</button>
+        </div>
+    </div>
+
+    <button id="mp-restart">New Game</button>
+    <a href="https://github.com/nathanielgreisen/nathanielgreisen.github.io/tree/main/CSCI3210/HW2" target="_blank" class="github-link">View on GitHub</a>
+
+    <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"
+        integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+    <script src="script.js"></script>
+</body>
+
+</html>

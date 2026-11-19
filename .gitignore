@@ -4,3 +4,32 @@ dist/
 .prerender/
 playwright-report/
 test-results/
+
+# Local tests and coverage
+test/
+tests/
+__tests__/
+__snapshots__/
+*.test.*
+*.spec.*
+test.*
+tests.*
+test_*.py
+*_test.py
+playwright.config.*
+coverage/
+.coverage
+.pytest_cache/
+
+# Coursework development and site output
+.env
+.env.*
+!.env.example
+!.env.production.example
+.venv/
+__pycache__/
+*.py[cod]
+*.sqlite3
+*.sqlite3-*
+staticfiles/
+_site/
