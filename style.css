@@ -1,45 +1,156 @@
+:root {
+  color-scheme: dark;
+  --paper: #171717;
+  --text: #ebebeb;
+  --muted: #b2b2b2;
+  --rule: #3b3b3b;
+}
+
+* { box-sizing: border-box; }
+
 body {
-    margin: 0;
-    height: 85vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: #111;
-    overflow: hidden;
-    font-family: "Fredoka", sans-serif;
-    font-weight: 400;
-    font-optical-sizing: auto;
+  position: relative;
+  margin: 0;
+  background: var(--paper);
+  color: var(--text);
+  font: 16px/1.6 Arial, sans-serif;
 }
 
-.center-container {
-    text-align: center;
+#root { display: contents; }
+
+a { color: inherit; text-underline-offset: 4px; }
+a:hover { text-decoration-thickness: 2px; }
+
+.page-width {
+  width: min(1080px, calc(100% - 88px));
+  margin-inline: auto;
 }
 
-.main-title {
-    font-size: 8em;
-    margin-bottom: -0.2em;
-    color: rgb(209, 255, 255)
+header, footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  padding-block: 22px;
+  font-size: 14px;
 }
 
-.subtext {
-    font-size: 3em;
-    color: #9c9c9c;
+header { border-bottom: 1px solid var(--rule); }
+footer { border-top: 1px solid var(--rule); color: var(--muted); }
+header a { text-decoration: none; }
+header a:hover, nav a[aria-current="page"] { text-decoration: underline; }
+.home { font-weight: bold; }
+nav { display: flex; flex-wrap: wrap; gap: 10px 24px; }
+
+.intro {
+  position: relative;
+  isolation: isolate;
+  padding-block: 62px 72px;
 }
 
-#circle {
-    width: 100px;
-    height: 100px;
-    background: deepskyblue;
-    border-radius: 50%;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    transition: transform 0.05s linear;
+.intro-copy { position: relative; padding-block: 12px; }
+
+.intro-grid {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
 }
 
-summary {
-    cursor: pointer;
-    text-decoration: underline;
-    list-style: none;
+.page-bubbles {
+  position: fixed;
+  z-index: 1;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+h1 {
+  font-size: clamp(42px, 6.2vw, 82px);
+  line-height: 1.03;
+  letter-spacing: -.065em;
+  margin: 0 0 24px;
+}
+
+.home-intro .intro-copy,
+body.forming-bubble {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.home-intro {
+  min-height: 65svh;
+  align-content: center;
+  overflow: clip;
+}
+
+.home-intro h1 { font-size: clamp(53px, 8.4vw, 108px); line-height: .94; }
+.name-letter {
+  position: relative;
+  display: inline-block;
+  cursor: grab;
+  touch-action: none;
+}
+.name-letter.is-dragging {
+  z-index: 1;
+  cursor: grabbing;
+}
+/* Float the text inside its physics box so the drift does not steer the letter. */
+.name-letter-glyph { display: inline-block; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .name-letter-glyph {
+    --drift-x: 4px;
+    --drift-y: -3px;
+    animation: letter-drift 14s ease-in-out infinite;
+  }
+
+  .name-letter:nth-of-type(even) .name-letter-glyph {
+    --drift-x: -3px;
+    --drift-y: 4px;
+    animation-duration: 17s;
+    animation-delay: 0.8s;
+  }
+
+  .name-letter:nth-of-type(3n) .name-letter-glyph {
+    --drift-x: 4.8px;
+    --drift-y: 1.4px;
+    animation-duration: 19s;
+    animation-delay: 1.6s;
+  }
+
+  @keyframes letter-drift {
+    0%, 50%, 100% { translate: 0 0; }
+    25% { translate: var(--drift-x) var(--drift-y); }
+    75% { translate: calc(-1 * var(--drift-x)) calc(-1 * var(--drift-y)); }
+  }
+}
+
+.intro p { max-width: 510px; margin: 0; color: var(--muted); font-size: 18px; }
+
+.projects {
+  border-top: 1px solid var(--rule);
+  display: grid;
+  grid-template-columns: 144px minmax(0, 1fr);
+  gap: 26px;
+  margin-bottom: 64px;
+}
+
+.projects h2 { font-size: 16px; margin: 21px 0 0; }
+.projects p { margin: 21px 0 0; color: var(--muted); }
+
+@media (max-width: 690px) {
+  .page-width { width: calc(100% - 36px); }
+  nav { gap: 8px 16px; }
+  .intro { padding-block: 35px 42px; }
+  .intro p { font-size: 16px; }
+  .home-intro h1 { font-size: clamp(38px, 10vw, 67px); }
+  .projects { grid-template-columns: 1fr; gap: 0; }
+  .projects p { margin-top: 8px; }
 }

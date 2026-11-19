@@ -1,0 +1,68 @@
+name: Verify portfolio prototype
+
+on:
+  push:
+    branches: [main, portfolio-prototype]
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the verified site to GitHub Pages
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            CSCI3210/MIDTERM/pixel-war/frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: npm ci
+      - run: npm run build
+      - name: Build the MIDTERM frontend
+        working-directory: CSCI3210/MIDTERM/pixel-war/frontend
+        env:
+          VITE_BACKEND_URL: ${{ vars.VITE_BACKEND_URL }}
+        run: |
+          if [ -z "$VITE_BACKEND_URL" ]; then
+            echo "::warning::Set VITE_BACKEND_URL to connect the published MIDTERM page to its Render backend."
+          fi
+          npm ci
+          npm run lint
+          npm run build
+      - run: python scripts/build_pages.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-static
+          path: _site/
+      - if: github.event_name == 'workflow_dispatch' && inputs.publish
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site/
+
+  deploy:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: github-pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
