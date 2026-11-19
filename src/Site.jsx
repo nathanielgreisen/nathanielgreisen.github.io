@@ -54,7 +54,7 @@ const notesMessage = "I will put notes here soon! :)";
 function Home() {
   return (
     <main id="top">
-      <Intro home>I study computer science at California Baptist University. I build software for the web and work on autonomous driving with the Long Knights robotics team.</Intro>
+      <Intro home>I code things sometimes</Intro>
 
       <section className="projects page-width" id="projects" aria-labelledby="projects-heading">
         <h2 id="projects-heading">Projects</h2>
